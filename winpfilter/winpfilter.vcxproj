@@ -94,7 +94,7 @@
       <AdditionalIncludeDirectories>.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>ndis.lib;wdmsec.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ndis.lib;wdmsec.lib;netio.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -120,7 +120,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="filter_subroutines.c" />
+    <ClCompile Include="ip.c" />
     <ClCompile Include="queue.c" />
+    <ClCompile Include="route.c" />
     <ClCompile Include="winpfilter.c" />
   </ItemGroup>
   <ItemGroup>
@@ -133,6 +135,7 @@
     <ClInclude Include="include\net\tcp.h" />
     <ClInclude Include="include\net\udp.h" />
     <ClInclude Include="include\queue.h" />
+    <ClInclude Include="include\route.h" />
     <ClInclude Include="include\winpfilter.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

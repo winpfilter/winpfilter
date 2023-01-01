@@ -36,6 +36,12 @@
     <ClCompile Include="queue.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="route.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ip.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\net\ether.h">
@@ -67,6 +73,9 @@
     </ClInclude>
     <ClInclude Include="include\net\tcp.h">
       <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="include\route.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

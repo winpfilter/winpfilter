@@ -3,6 +3,24 @@
 
 #include "winpfilter.h"
 #include "converter.h"
+#include "net/ipv4.h"
+#include "net/ipv6.h"
+
+typedef struct _IP_ADDRESS {
+	BYTE Family;
+	BYTE PrefixLength;
+	union
+	{
+		IPV4_ADDRESS	IPV4Address;
+		IPV6_ADDRESS	IPV6Address;
+	};
+	union
+	{
+		IPV4_ADDRESS	IPV4NetworkSegment;
+		IPV6_ADDRESS	IPV6NetworkSegment;
+	};
+}IP_ADDRESS, *PIP_ADDRESS;
+
 
 typedef enum _IP_PROTOCOLS
 {
@@ -26,3 +44,5 @@ typedef enum _IP_PROTOCOLS
 
 #define IP_HEADER_VERSION(header)						((header)->Version)
 #define SET_IP_HEADER_VERSION(header,version)			((header)->Version = (BYTE)version)
+
+VOID InitializeIPAddressBySockAddrINet(PIP_ADDRESS IPAddress, PSOCKADDR_INET SockAddress, BYTE PrefixLength);

@@ -1,5 +1,5 @@
 /*
- * File Name:		global.h
+ * File Name:		winpfilter.h
  * Description:		Provide global constants and definition for winpfilter project
  * Author:			HBSnail
  */
@@ -7,6 +7,7 @@
 
 #include <ntifs.h>
 #include <wdmsec.h>
+#include <netioapi.h>
 #include <ndis.h>
 
 
@@ -25,8 +26,12 @@
 #define FILTER_ALLOC_TAG 'FTAT'
 #define SEND_POOL_ALLOC_TAG 'SPAT'
 #define NET_PACKET_ALLOC_TAG 'APPN'
+#define ROUTE_TABLE_ALLOC_TAG 'TATR'
 
 typedef UCHAR BYTE;
+#define BYTE_MIN_VALUE 0
+#define BYTE_BIT_LENGTH 8
+#define BYTE_MAX_VALUE 255
 
 typedef enum _FILTER_STATE {
     FilterStateUnspecified,

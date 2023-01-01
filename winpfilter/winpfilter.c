@@ -6,9 +6,11 @@
 
 #include "winpfilter.h"
 #include "filter_subroutines.h"
+#include "route.h"
 
 NDIS_HANDLE FilterDriverHandle = NULL;
 NDIS_HANDLE FilterDriverObject = NULL;
+
 
 NDIS_SPIN_LOCK FilterListLock;
 LIST_ENTRY FilterModuleList;
@@ -24,6 +26,7 @@ VOID DriverUnload(PDRIVER_OBJECT driverObject) {
 	NdisFDeregisterFilterDriver(FilterDriverHandle);
 	IoDeleteSymbolicLink(&(UNICODE_STRING)RTL_CONSTANT_STRING(WINPFILTER_COMMUNICATION_DEVICE_LINK));
 	IoDeleteDevice(WPFilterCommunicationDevice);
+	StopMonitorSystemRouteTableChange();
 
 	TRACE_EXIT();
 }
@@ -74,6 +77,8 @@ VOID InitWPFilter(PNDIS_FILTER_DRIVER_CHARACTERISTICS pFChars) {
 
 }
 
+
+
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) {
 
 	NDIS_FILTER_DRIVER_CHARACTERISTICS FChars;
@@ -120,7 +125,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		DriverObject->DriverUnload = DriverUnload;
 
 		//Create the device to communicate with Ring3 
-		Status = IoCreateDeviceSecure(DriverObject, 0, &DeviceName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE,&SDDLKernelOnly, (LPCGUID)&WPFilterDeviceGUID, &WPFilterCommunicationDevice);
+		Status = IoCreateDeviceSecure(DriverObject, 0, &DeviceName, FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &SDDLKernelOnly, (LPCGUID)&WPFilterDeviceGUID, &WPFilterCommunicationDevice);
 		if (!NT_SUCCESS(Status)) {
 			NdisFreeSpinLock(&FilterListLock);
 			NdisFDeregisterFilterDriver(FilterDriverHandle);
@@ -128,7 +133,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		}
 
 		//Create a symbolic link for the device
-		Status = IoCreateSymbolicLink(&DeviceLink, &(UNICODE_STRING)RTL_CONSTANT_STRING(WINPFILTER_COMMUNICATION_DEVICE_NAME));
+		Status = IoCreateSymbolicLink(&DeviceLink, &DeviceName);
 		if (!NT_SUCCESS(Status)) {
 			NdisFreeSpinLock(&FilterListLock);
 			NdisFDeregisterFilterDriver(FilterDriverHandle);
@@ -136,6 +141,18 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 			break;
 		}
 
+
+		//Monitor route table change
+		//WPFilterRouteTableChangeNotifyHandle = &row;
+		Status = StartMonitorSystemRouteTableChange();
+
+		if (!NT_SUCCESS(Status)) {
+			NdisFreeSpinLock(&FilterListLock);
+			NdisFDeregisterFilterDriver(FilterDriverHandle);
+			IoDeleteDevice(WPFilterCommunicationDevice);
+			IoDeleteSymbolicLink(&DeviceLink);
+			break;
+		}
 		//Set the IRP dispatch subroutines for driver
 		/*driverObject->MajorFunction[IRP_MJ_CREATE] = WPTCommDeviceCreate;
 		driverObject->MajorFunction[IRP_MJ_CLOSE] = WPTCommDeviceClose;
@@ -147,7 +164,8 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 	} while (FALSE);
 
 
+
 	TRACE_EXIT();
+	DbgPrint("%X\n", Status);
 	return Status;
 }
-                
