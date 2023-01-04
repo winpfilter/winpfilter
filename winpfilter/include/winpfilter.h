@@ -27,6 +27,7 @@
 #define SEND_POOL_ALLOC_TAG 'SPAT'
 #define NET_PACKET_ALLOC_TAG 'APPN'
 #define ROUTE_TABLE_ALLOC_TAG 'TATR'
+#define HOOK_ENTRY_ALLOC_TAG 'TAEH'
 
 typedef UCHAR BYTE;
 #define BYTE_MIN_VALUE 0
@@ -51,7 +52,7 @@ typedef struct _FILTER_CONTEXT {
 
     //Reference to this filter
     NDIS_HANDLE FilterHandle;
-    UINT        MaxFrameSize;
+    ULONG       MaxFrameSize;
     NET_IFINDEX MiniportIfIndex;
 
     BYTE MacAddress[NDIS_MAX_PHYS_ADDRESS_LENGTH];
@@ -98,4 +99,8 @@ typedef struct _FILTER_CONTEXT {
 
 #define TRACE_ENTER() TRACE_DBG("ENTER\n")
 #define TRACE_EXIT()  TRACE_DBG("EXIT\n")
+#ifdef DBG
 #define TRACE_DBG(Fmt, ...)   DbgPrintEx( DPFLTR_IHVNETWORK_ID, DPFLTR_TRACE_LEVEL,   __FUNCTION__ ": " Fmt, __VA_ARGS__ )
+#else
+#define TRACE_DBG(Fmt, ...) 
+#endif

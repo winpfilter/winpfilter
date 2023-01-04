@@ -42,6 +42,9 @@
     <ClCompile Include="ip.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="hook_manager.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\net\ether.h">
@@ -75,6 +78,9 @@
       <Filter>Header Files\net</Filter>
     </ClInclude>
     <ClInclude Include="include\route.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\hook_manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

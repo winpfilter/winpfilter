@@ -1,6 +1,24 @@
 #include "net/ip.h"
 
+#ifdef DBG
+VOID PrintIPAddress(PIP_ADDRESS addr) {
+	TRACE_DBG("Family:%d\n", addr->Family);
+	TRACE_DBG("PrefixLength:%d\nIPAddress", addr->PrefixLength);
+	int a = (addr->Family == IP) ? IPV4_ADDRESS_BYTE_LENGTH : IPV6_ADDRESS_BYTE_LENGTH;
+	for (int i = 0; i < a; i++) {
+		TRACE_DBG("%d.", addr->IPV6Address.AddressBytes[i]);
+	}
+	TRACE_DBG("\nIPAddressSegment");
+	for (int i = 0; i < a; i++) {
+		TRACE_DBG("%d.", addr->IPV6NetworkSegment.AddressBytes[i]);
+	}
+	TRACE_DBG("\n");
+}
+#endif 
+
+
 VOID InitializeIPAddressBySockAddrINet(PIP_ADDRESS IPAddress,PSOCKADDR_INET SockAddress,BYTE PrefixLength) {
+	RtlZeroMemory(IPAddress, sizeof(IP_ADDRESS));
 	if (SockAddress->si_family == AF_INET) {
 		IPAddress->Family = IP;
 		if (PrefixLength > IPV4_ADDRESS_BIT_LENGTH)
