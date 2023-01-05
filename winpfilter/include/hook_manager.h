@@ -16,10 +16,10 @@ typedef struct _HOOK_DATA {
 
 typedef ULONG HOOK_ACTION;
 
-//ULONG HOOKFUNCTION(ULONG InterfaceID,ULONG FilterPoint,ULONG BufferLength,PHOOK_DATA Buffer);
+//ULONG HOOKFUNCTION(ULONG InterfaceID,ULONG FilterPoint,ULONG BufferLength,PHOOK_DATA Data);
 //At most time BufferLength = MTU
-//The hook function can modify the hook_data but DataLength must <= BufferLength
-typedef HOOK_ACTION(*HOOK_FUNCTION)(ULONG, ULONG,ULONG,PHOOK_DATA) ;
+//The hook function can modify the hook_data but make sure DataLength <= BufferLength
+typedef HOOK_ACTION(*HOOK_FUNCTION)(ULONG InterfaceID, ULONG FilterPoint, ULONG BufferLength, PHOOK_DATA Data);
 
 // HOOK_ACTION values
 // Drop the packet 
@@ -31,19 +31,30 @@ typedef HOOK_ACTION(*HOOK_FUNCTION)(ULONG, ULONG,ULONG,PHOOK_DATA) ;
 // Accept the packet and truncate this Winpfilter hook processing chain
 #define HOOK_ACTION_TRUNCATE_CHAIN	3
 
- 
+typedef union _HOOK_RESULT {
+	ULONG	Result;
+	struct MyStruct
+	{
+		BYTE	Accept;
+		BYTE	Modified;
+		BYTE	Reserve0;
+		BYTE	Reserve1;
+	};
+}HOOK_RESULT, * PHOOK_RESULT;
+
 typedef struct _HOOK_ENTRY {
 	LIST_ENTRY		HookLink;
 	ULONG			Priority;
 	HOOK_FUNCTION	HookFunction;
 	ULONG	FilterPoint;
-}HOOK_ENTRY,*PHOOK_ENTRY;
+}HOOK_ENTRY, * PHOOK_ENTRY;
 
-VOID InitializeFilterHookManager();
+NTSTATUS InitializeFilterHookManager(NDIS_HANDLE Handle);
 NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoint);
 VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoint);
 VOID UnregisterAllHooks(ULONG FilterPoint);
 VOID FreeFilterHookManager();
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG DataLength, ULONG BufferLength, ULONG FilterPoint, ULONG InterfaceIndex, UCHAR DispatchLevel);
 
 #ifdef DBG
 VOID PrintHookTable();

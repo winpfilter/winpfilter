@@ -6,6 +6,7 @@
 
 #include "winpfilter.h"
 #include "filter_subroutines.h"
+#include "hook_manager.h"
 #include "net/ether.h"
 
 extern NDIS_HANDLE FilterDriverObject;
@@ -296,6 +297,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 	FILTER_CONTEXT* FilterContext = (FILTER_CONTEXT*)FilterModuleContext;
 	BOOLEAN CanNotPend = NDIS_TEST_RECEIVE_CANNOT_PEND(ReceiveFlags);
+	BOOLEAN DispatchLevel = NDIS_TEST_RECEIVE_AT_DISPATCH_LEVEL(ReceiveFlags);;
 
 	PNET_BUFFER_LIST AcceptListHead = NULL;
 	PNET_BUFFER_LIST AcceptListTail = NULL;
@@ -328,10 +330,11 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 		PNET_BUFFER CurrentNB = NET_BUFFER_LIST_FIRST_NB(CurrentNBL);
 
 		PNET_BUFFER_LIST TempNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
-		BYTE* ethDataPtr;
-
+		BYTE* EthDataPtr;
+		HOOK_RESULT Result;
+		ULONG DataLength = CurrentNB->DataLength;
 		do {
-			if (CurrentNB->DataLength == 0 || CurrentNB->DataLength > PacketBufferLength) {
+			if (DataLength == 0 || DataLength > PacketBufferLength) {
 				//It must not occurr. Return the NBL.
 				if (!CanNotPend) {
 					LinkSingleNBLIntoNBLChainHead(ReturnList, CurrentNBL);
@@ -341,26 +344,56 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			}
 
 			RtlZeroMemory(PacketBuffer, PacketBufferLength);
-			ethDataPtr = NdisGetDataBuffer(CurrentNB, CurrentNB->DataLength, PacketBuffer, 1, 0);
+			EthDataPtr = NdisGetDataBuffer(CurrentNB, DataLength, PacketBuffer, 1, 0);
 			//If data in NB is contiguous, system will not auto copy the data, which means we should copy them manually
-			if (ethDataPtr != (PacketBuffer)) {
-				NdisMoveMemory((BYTE*)PacketBuffer, ethDataPtr, CurrentNB->DataLength);
+			if (EthDataPtr != (PacketBuffer)) {
+				NdisMoveMemory((BYTE*)PacketBuffer, EthDataPtr, DataLength);
 			}
 
-			if (!CanNotPend) {
-				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, CurrentNBL);
-			}
+			// The ethernet frame data is in PacketBuffer
+			Result = FilterEthernetPacket(
+						PacketBuffer, 
+						DataLength, 
+						PacketBufferLength,
+						FILTER_POINT_PREROUTING,
+						FilterContext->MiniportIfIndex,
+						DispatchLevel
+					);
+			
+			if (Result.Accept) {
+
+				// Accept this packet
+				if (!CanNotPend) {
+					LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, CurrentNBL);
+				}
+				else {
+					// if (CanNotPend) :
+					// For each NBL that is NOT dropped, temporarily unlink it from the linked list.
+					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
+					// Indicate it up alone with NdisFIndicateReceiveNetBufferLists and the NDIS_RECEIVE_FLAGS_RESOURCES flag set.
+					NdisFIndicateReceiveNetBufferLists(FilterContext->FilterHandle, CurrentNBL, PortNumber,
+						1, ReceiveFlags | NDIS_RECEIVE_FLAGS_RESOURCES);
+					// Then immediately relink the NBL back into the chain.
+					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = TempNBL;
+				}
+				AcceptListNBLCnt++;
+
+			} 
 			else {
-				// if (CanNotPend) :
-				// For each NBL that is NOT dropped, temporarily unlink it from the linked list.
-				NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
-				// Indicate it up alone with NdisFIndicateReceiveNetBufferLists and the NDIS_RECEIVE_FLAGS_RESOURCES flag set.
-				NdisFIndicateReceiveNetBufferLists(FilterContext->FilterHandle, CurrentNBL, PortNumber,
-					1, ReceiveFlags | NDIS_RECEIVE_FLAGS_RESOURCES);
-				// Then immediately relink the NBL back into the chain.
-				NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = TempNBL;
+
+				// Drop this packet
+				if (!CanNotPend) {
+					LinkSingleNBLIntoNBLChainHead(ReturnList, CurrentNBL);
+				}
+				ReturnListNBLCnt++;
+
+			}	
+
+			if (Result.Modified) {
+				// TODO
+				// The hook function modified the buffer
+				// We need assign a new NBl for the Packet
 			}
-			AcceptListNBLCnt++;
 
 		} while (FALSE);
 
@@ -370,7 +403,6 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 	ExFreePoolWithTag(PacketBuffer, NET_PACKET_ALLOC_TAG);
 
 	TRACE_DBG("CanNotPend:%d\n", CanNotPend);
-	TRACE_DBG("%d\n", PacketBufferLength);
 	TRACE_DBG("TotalCnt:%d\nReturnListCnt:%d\nAcceptListCnt:%d\n", NumberOfNetBufferLists, ReturnListNBLCnt, AcceptListNBLCnt);
 
 	// if (CanNotPend) :

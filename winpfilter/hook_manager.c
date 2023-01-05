@@ -1,7 +1,7 @@
 #include "hook_manager.h"
 
 LIST_ENTRY HookLists[HOOK_LIST_COUNT];
-NDIS_SPIN_LOCK HookListsLock[HOOK_LIST_COUNT];
+PNDIS_RW_LOCK_EX HookListsLock[HOOK_LIST_COUNT];
 
 
 //Debug functions
@@ -30,15 +30,21 @@ VOID PrintHookTable() {
 #endif
 
 
-VOID InitializeFilterHookManager() {
+NTSTATUS InitializeFilterHookManager(NDIS_HANDLE Handle) {
 	TRACE_ENTER();
-
+	NTSTATUS Status = STATUS_SUCCESS;
 	for (ULONG i = 0; i < HOOK_LIST_COUNT; i++) {
 		InitializeListHead(&HookLists[i]);
-		NdisAllocateSpinLock(&HookListsLock[i]);
+		HookListsLock[i] = NdisAllocateRWLock(Handle);
+		if (HookListsLock == NULL) {
+			Status = STATUS_UNSUCCESSFUL;
+		}
 	}
-
+	if (!NT_SUCCESS(Status)) {
+		FreeFilterHookManager();
+	}
 	TRACE_EXIT();
+	return Status;
 }
 
 VOID FreeFilterHookManager() {
@@ -46,7 +52,7 @@ VOID FreeFilterHookManager() {
 
 	for (ULONG i = 0; i < HOOK_LIST_COUNT; i++) {
 		UnregisterAllHooks(i);
-		NdisFreeSpinLock(&HookListsLock[i]);
+		NdisFreeRWLock(HookListsLock[i]);
 	}
 
 	TRACE_EXIT();
@@ -58,6 +64,7 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPo
 	PHOOK_ENTRY Entry;
 	PLIST_ENTRY InsertPos;
 	PHOOK_ENTRY CurrentEntry;
+	LOCK_STATE_EX LockState;
 
 	Entry = ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(HOOK_ENTRY), HOOK_ENTRY_ALLOC_TAG);
 	if (Entry == NULL) {
@@ -68,7 +75,7 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPo
 	Entry->HookFunction = HookFunction;
 	Entry->Priority = Priority;
 
-	NdisAcquireSpinLock(&HookListsLock[FilterPoint]);
+	NdisAcquireRWLockWrite(HookListsLock[FilterPoint],&LockState,0);
 
 	InsertPos = HookLists[FilterPoint].Flink;
 	for (; 
@@ -79,8 +86,8 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPo
 		if ((Priority == CurrentEntry->Priority)
 			&& (HookFunction == CurrentEntry->HookFunction)) {
 			//The same hook has already been registered, refuse it!
-			//*** MUST release the spin lock, otherwise it will lead to a deadlock
-			NdisReleaseSpinLock(&HookListsLock[FilterPoint]);
+			//*** MUST release the lock, otherwise it will lead to a deadlock
+			NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
 			return STATUS_UNSUCCESSFUL;
 		}
 		if (Priority > CurrentEntry->Priority) {
@@ -88,9 +95,9 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPo
 		}
 	}
 
-	InsertTailList(InsertPos, Entry);
+	InsertTailList(InsertPos, &Entry->HookLink);
 
-	NdisReleaseSpinLock(&HookListsLock[FilterPoint]);
+	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
 
 	return STATUS_SUCCESS;
 }
@@ -98,8 +105,9 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPo
 VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoint) {
 
 	PHOOK_ENTRY CurrentEntry;
+	LOCK_STATE_EX LockState;
 
-	NdisAcquireSpinLock(&HookListsLock[FilterPoint]);
+	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, 0);
 
 	for (PLIST_ENTRY RemovePos = HookLists[FilterPoint].Flink; 
 		RemovePos != &HookLists[FilterPoint];
@@ -114,7 +122,7 @@ VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoin
 		}
 	}
 
-	NdisReleaseSpinLock(&HookListsLock[FilterPoint]);
+	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
 
 }
 
@@ -122,8 +130,9 @@ VOID UnregisterAllHooks(ULONG FilterPoint) {
 
 	PLIST_ENTRY TempPos;
 	PHOOK_ENTRY CurrentEntry;
+	LOCK_STATE_EX LockState;
 
-	NdisAcquireSpinLock(&HookListsLock[FilterPoint]);
+	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, 0);
 
 	for (PLIST_ENTRY RemovePos = HookLists[FilterPoint].Flink;
 		RemovePos != &HookLists[FilterPoint];
@@ -137,6 +146,66 @@ VOID UnregisterAllHooks(ULONG FilterPoint) {
 		ExFreePoolWithTag(CurrentEntry, HOOK_ENTRY_ALLOC_TAG);
 	}
 
-	NdisReleaseSpinLock(&HookListsLock[FilterPoint]);
+	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
 
+}
+
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG DataLength,ULONG BufferLength, ULONG FilterPoint,ULONG InterfaceIndex,UCHAR DispatchLevel) {
+
+	HOOK_DATA Data;
+	LOCK_STATE_EX LockState;
+	HOOK_RESULT Result;
+	HOOK_ACTION Action;
+	PHOOK_ENTRY CurrentEntry;
+	HOOK_FUNCTION HookFunction;
+	BOOLEAN TruncateChainFlag = FALSE;
+
+	Data.Buffer = EthernetBuffer;
+	Data.DataLength = DataLength;
+
+	// Default result
+	Result.Result = 0;
+
+	NdisAcquireRWLockRead(HookListsLock[FilterPoint], &LockState, DispatchLevel);
+
+	for (PLIST_ENTRY Hook = HookLists[FilterPoint].Flink;
+		Hook != &HookLists[FilterPoint];
+		Hook = Hook->Flink
+		) {
+
+		CurrentEntry = CONTAINING_RECORD(Hook, HOOK_ENTRY, HookLink);
+		Action = (*CurrentEntry->HookFunction)(InterfaceIndex, FilterPoint, BufferLength, &Data);
+		switch (Action)
+		{
+		case HOOK_ACTION_ACCEPT:
+			Result.Accept = TRUE;
+			break;
+		case HOOK_ACTION_MODIFIED:
+			Result.Modified = TRUE;
+			break;
+		case HOOK_ACTION_TRUNCATE_CHAIN:
+			Result.Accept = TRUE;
+			TruncateChainFlag = TRUE;
+			break;
+		default:
+			// Drop the packet by default.
+			Result.Accept = FALSE;
+			Result.Modified = FALSE;
+			TruncateChainFlag = TRUE;
+			break;
+		}
+		// Exit loop if TruncateChainFlag set 
+		if (TruncateChainFlag) {
+			break;
+		}
+	}
+
+	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
+
+	// When the buffer been modified, create a new NBL and then drop the old one.
+	if (Result.Modified) {
+		Result.Accept = FALSE;
+	}
+
+	return Result;
 }

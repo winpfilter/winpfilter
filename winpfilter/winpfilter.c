@@ -161,7 +161,15 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 			break;
 		}
 
-		InitializeFilterHookManager();
+		Status = InitializeFilterHookManager(FilterDriverObject);
+		if (!NT_SUCCESS(Status)) {
+			NdisFreeSpinLock(&FilterListLock);
+			NdisFDeregisterFilterDriver(FilterDriverHandle);
+			IoDeleteDevice(WPFilterCommunicationDevice);
+			IoDeleteSymbolicLink(&DeviceLink);
+			StopMonitorSystemRouteTableChange();
+			break;
+		}
 
 
 		//Set the IRP dispatch subroutines for driver

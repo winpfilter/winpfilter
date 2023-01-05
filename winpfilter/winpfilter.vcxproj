@@ -90,7 +90,7 @@
     </ClCompile>
     <ClCompile>
       <TreatWarningAsError>false</TreatWarningAsError>
-      <PreprocessorDefinitions>NDIS_SUPPORT_NDIS61;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDIS_SUPPORT_NDIS620;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <Optimization>Disabled</Optimization>
     </ClCompile>
