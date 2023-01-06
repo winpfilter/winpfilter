@@ -293,6 +293,16 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 	ChainHead = SingleNBLNode;										\
 }
 
+#define DropPacket(CanNotPend,NBLDropListHeader,SingleNBLPendingDrop,DropCounter,DroppedFlag) {	\
+	if(!DroppedFlag){																			\
+		if (!CanNotPend) {																		\
+			LinkSingleNBLIntoNBLChainHead(NBLDropListHeader, SingleNBLPendingDrop);				\
+		}																						\
+		DropCounter++;																			\
+		DroppedFlag = TRUE;																		\
+	}																							\
+}
+
 VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER PortNumber, ULONG NumberOfNetBufferLists, ULONG ReceiveFlags) {
 
 	FILTER_CONTEXT* FilterContext = (FILTER_CONTEXT*)FilterModuleContext;
@@ -331,15 +341,16 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 		PNET_BUFFER_LIST TempNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
 		BYTE* EthDataPtr;
-		HOOK_RESULT Result;
+		HOOK_RESULT PreroutingFilterResult;
+		HOOK_RESULT InputFilterResult;
 		ULONG DataLength = CurrentNB->DataLength;
+		BOOLEAN Dropped = FALSE;
+		PNET_BUFFER_LIST IndicateNBL;
+
 		do {
 			if (DataLength == 0 || DataLength > PacketBufferLength) {
 				//It must not occurr. Return the NBL.
-				if (!CanNotPend) {
-					LinkSingleNBLIntoNBLChainHead(ReturnList, CurrentNBL);
-				}
-				ReturnListNBLCnt++;
+				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt,Dropped);
 				break;
 			}
 
@@ -350,50 +361,81 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				NdisMoveMemory((BYTE*)PacketBuffer, EthDataPtr, DataLength);
 			}
 
-			// The ethernet frame data is in PacketBuffer
-			Result = FilterEthernetPacket(
+
+			/*========== THE PRE_ROUTING FILTER POINT ==========*/
+			PreroutingFilterResult = FilterEthernetPacket(
 						PacketBuffer, 
-						DataLength, 
+						&DataLength, 
 						PacketBufferLength,
 						FILTER_POINT_PREROUTING,
 						FilterContext->MiniportIfIndex,
 						DispatchLevel
 					);
 			
-			if (Result.Accept) {
-
-				// Accept this packet
-				if (!CanNotPend) {
-					LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, CurrentNBL);
-				}
-				else {
-					// if (CanNotPend) :
-					// For each NBL that is NOT dropped, temporarily unlink it from the linked list.
-					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
-					// Indicate it up alone with NdisFIndicateReceiveNetBufferLists and the NDIS_RECEIVE_FLAGS_RESOURCES flag set.
-					NdisFIndicateReceiveNetBufferLists(FilterContext->FilterHandle, CurrentNBL, PortNumber,
-						1, ReceiveFlags | NDIS_RECEIVE_FLAGS_RESOURCES);
-					// Then immediately relink the NBL back into the chain.
-					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = TempNBL;
-				}
-				AcceptListNBLCnt++;
-
-			} 
-			else {
-
+			if (!PreroutingFilterResult.Accept) {
 				// Drop this packet
-				if (!CanNotPend) {
-					LinkSingleNBLIntoNBLChainHead(ReturnList, CurrentNBL);
+				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+
+				// If not modified, go next packet, otherwise continue process this one
+				if (!PreroutingFilterResult.Modified) {
+					break;
 				}
-				ReturnListNBLCnt++;
+			}
+			/*========== END PRE_ROUTING FILTER POINT ==========*/
 
-			}	
 
-			if (Result.Modified) {
+
+
+			// Todo routing decision
+
+
+
+
+			/*========== THE INPUT FILTER POINT ==========*/
+			InputFilterResult = FilterEthernetPacket(
+				PacketBuffer,
+				&DataLength,
+				PacketBufferLength,
+				FILTER_POINT_INPUT,
+				FilterContext->MiniportIfIndex,
+				DispatchLevel
+			);
+
+			if (!InputFilterResult.Accept) {
+				// Drop this packet
+				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+
+				// If not modified, go next packet, otherwise continue process this one
+				if (!InputFilterResult.Modified) {
+					break;
+				}
+			}
+			/*========== END INPUT FILTER POINT ==========*/
+
+			IndicateNBL = CurrentNBL;
+
+			if (PreroutingFilterResult.Modified || InputFilterResult.Modified) {
 				// TODO
 				// The hook function modified the buffer
 				// We need assign a new NBl for the Packet
+				
 			}
+			// Indicate up this packet
+			AcceptListNBLCnt++;
+			if (!CanNotPend) {
+				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, IndicateNBL);
+				break;
+			}
+			// if (CanNotPend) :
+			// For each NBL that is NOT dropped, temporarily unlink it from the linked list.
+			NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = NULL;
+			// Indicate it up alone with NdisFIndicateReceiveNetBufferLists and the NDIS_RECEIVE_FLAGS_RESOURCES flag set.
+			NdisFIndicateReceiveNetBufferLists(FilterContext->FilterHandle, IndicateNBL, PortNumber,
+				1, ReceiveFlags | NDIS_RECEIVE_FLAGS_RESOURCES);
+			// Then immediately relink the NBL back into the chain.
+			NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = TempNBL;
+			
+			//TODO free the packet if we allocate it.
 
 		} while (FALSE);
 

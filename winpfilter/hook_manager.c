@@ -59,7 +59,7 @@ VOID FreeFilterHookManager() {
 }
 
 
-NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoint) {
+NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint) {
 
 	PHOOK_ENTRY Entry;
 	PLIST_ENTRY InsertPos;
@@ -102,7 +102,7 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPo
 	return STATUS_SUCCESS;
 }
 
-VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoint) {
+VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint) {
 
 	PHOOK_ENTRY CurrentEntry;
 	LOCK_STATE_EX LockState;
@@ -126,7 +126,7 @@ VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, ULONG FilterPoin
 
 }
 
-VOID UnregisterAllHooks(ULONG FilterPoint) {
+VOID UnregisterAllHooks(FILTER_PONIT FilterPoint) {
 
 	PLIST_ENTRY TempPos;
 	PHOOK_ENTRY CurrentEntry;
@@ -150,18 +150,14 @@ VOID UnregisterAllHooks(ULONG FilterPoint) {
 
 }
 
-HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG DataLength,ULONG BufferLength, ULONG FilterPoint,ULONG InterfaceIndex,UCHAR DispatchLevel) {
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG BufferLength, FILTER_PONIT FilterPoint,ULONG InterfaceIndex,UCHAR DispatchLevel) {
 
-	HOOK_DATA Data;
 	LOCK_STATE_EX LockState;
 	HOOK_RESULT Result;
 	HOOK_ACTION Action;
 	PHOOK_ENTRY CurrentEntry;
 	HOOK_FUNCTION HookFunction;
 	BOOLEAN TruncateChainFlag = FALSE;
-
-	Data.Buffer = EthernetBuffer;
-	Data.DataLength = DataLength;
 
 	// Default result
 	Result.Result = 0;
@@ -174,7 +170,7 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG DataLength,ULONG Bu
 		) {
 
 		CurrentEntry = CONTAINING_RECORD(Hook, HOOK_ENTRY, HookLink);
-		Action = (*CurrentEntry->HookFunction)(InterfaceIndex, FilterPoint, BufferLength, &Data);
+		Action = (*CurrentEntry->HookFunction)(InterfaceIndex, FilterPoint, BufferLength, EthernetBuffer, DataLength);
 		switch (Action)
 		{
 		case HOOK_ACTION_ACCEPT:
