@@ -156,11 +156,11 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG B
 	HOOK_RESULT Result;
 	HOOK_ACTION Action;
 	PHOOK_ENTRY CurrentEntry;
-	HOOK_FUNCTION HookFunction;
 	BOOLEAN TruncateChainFlag = FALSE;
 
 	// Default result
-	Result.Result = 0;
+	Result.Accept = TRUE;
+	Result.Modified = FALSE;
 
 	NdisAcquireRWLockRead(HookListsLock[FilterPoint], &LockState, DispatchLevel);
 

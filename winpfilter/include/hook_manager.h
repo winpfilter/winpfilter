@@ -14,7 +14,7 @@ typedef ULONG FILTER_PONIT;
 
 typedef ULONG HOOK_ACTION;
 
-//ULONG HOOKFUNCTION(ULONG InterfaceID,ULONG FilterPoint,ULONG BufferLength,PHOOK_DATA Data);
+//ULONG HOOKFUNCTION(ULONG InterfaceID,FILTER_PONIT FilterPoint,ULONG BufferLength,PHOOK_DATA Data);
 //At most time BufferLength = MTU
 //The hook function can modify the hook_data but make sure DataLength <= BufferLength
 typedef HOOK_ACTION(*HOOK_FUNCTION)(ULONG InterfaceID, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);

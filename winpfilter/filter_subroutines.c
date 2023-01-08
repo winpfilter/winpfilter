@@ -15,36 +15,66 @@ extern NDIS_HANDLE FilterDriverHandle;
 extern NDIS_SPIN_LOCK FilterListLock;
 extern LIST_ENTRY FilterModuleList;
 
+VOID FreeSingleNBL(PNET_BUFFER_LIST NetBufferList);
 
-VOID WPFilterFreeNBL(FILTER_CONTEXT* filterContext, NET_BUFFER_LIST* NetBufferLists) {
+// Remove and free all NBL allocated with FilterContext->FilterHandle in an NBL chain.
+// This function will return the head of the NBL chain 
+PNET_BUFFER_LIST RemoveNBLsAllocatedByFilterFromNBLChain(PFILTER_CONTEXT FilterContext, PNET_BUFFER_LIST NetBufferListChain) {
+	PNET_BUFFER_LIST NBLChainHeader = NetBufferListChain;
+	PNET_BUFFER_LIST CurrentNBL = NetBufferListChain;
+	PNET_BUFFER_LIST PreviousNBL = NULL;
+	PNET_BUFFER_LIST NextNBL = NULL;
 
-	NET_BUFFER_LIST* pNetBufList = NetBufferLists;
+	while (CurrentNBL != NULL) {
+		NextNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
 
-
-	while (pNetBufList != NULL) {
-		NET_BUFFER* currentBuffer = NET_BUFFER_LIST_FIRST_NB(pNetBufList);
-		while (currentBuffer != NULL)
-		{
-			//Get the NB and free
-			MDL* fMDL = NET_BUFFER_FIRST_MDL(currentBuffer);
-
-			//Our MDL chain only contains 1 MDL
-			//Just get the memory & free both of them
-			VOID* buffer = MmGetSystemAddressForMdlSafe(fMDL, HighPagePriority | MdlMappingNoExecute);
-			if (buffer != NULL) {
-				NdisFreeMemory(buffer, 0, 0);
+		if (CurrentNBL->SourceHandle == FilterContext->FilterHandle) {
+			// This NBL allocated by us.
+			// Free it!
+			if (CurrentNBL == NBLChainHeader) {
+				NBLChainHeader = NextNBL;
 			}
-			NdisFreeMdl(fMDL);
-			currentBuffer = NET_BUFFER_NEXT_NB(currentBuffer);
+			else {
+				PreviousNBL->Next = NextNBL;
+			}
+			CurrentNBL->Next = NULL;
+			FreeSingleNBL(CurrentNBL);
+			CurrentNBL = NextNBL;
+
+			continue;
 		}
 
-		//Unlink NBL one by one
-		NET_BUFFER_LIST* currNBL = pNetBufList;
-		NET_BUFFER_LIST_NEXT_NBL(currNBL) = NULL;
-		pNetBufList = NET_BUFFER_LIST_NEXT_NBL(pNetBufList);
-		//Free the NBL in processing
-		NdisFreeNetBufferList(currNBL);
+		PreviousNBL = CurrentNBL;
+		CurrentNBL = NextNBL;
 	}
+
+	return NBLChainHeader;
+}
+
+VOID FreeSingleNBL(PNET_BUFFER_LIST NetBufferList) {
+	PNET_BUFFER_LIST CurrentNBL = NetBufferList;
+	PNET_BUFFER CurrentNetBuffer = NET_BUFFER_LIST_FIRST_NB(NetBufferList);
+	PMDL CurrentMDL;
+	PVOID DataBuffer;
+
+	while (CurrentNetBuffer != NULL)
+	{
+		// Get the NB and free
+		CurrentMDL = NET_BUFFER_FIRST_MDL(CurrentNetBuffer);
+		if (CurrentMDL != NULL) {
+			// Our MDL chain only contains 1 MDL
+			// Just get the memory & free both of them 
+			DataBuffer = MmGetSystemAddressForMdlSafe(CurrentMDL, HighPagePriority | MdlMappingNoExecute);
+			if (DataBuffer != NULL) {
+				ExFreePoolWithTag(DataBuffer, NET_PACKET_ALLOC_TAG);
+			}
+			NdisFreeMdl(CurrentMDL);
+		}
+		CurrentNetBuffer = NET_BUFFER_NEXT_NB(CurrentNetBuffer);
+	}
+
+	// Free the NBL in
+	NdisFreeNetBufferList(CurrentNBL);
 }
 
 
@@ -305,7 +335,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 
 VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER PortNumber, ULONG NumberOfNetBufferLists, ULONG ReceiveFlags) {
 
-	FILTER_CONTEXT* FilterContext = (FILTER_CONTEXT*)FilterModuleContext;
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
 	BOOLEAN CanNotPend = NDIS_TEST_RECEIVE_CANNOT_PEND(ReceiveFlags);
 	BOOLEAN DispatchLevel = NDIS_TEST_RECEIVE_AT_DISPATCH_LEVEL(ReceiveFlags);;
 
@@ -346,6 +376,8 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 		ULONG DataLength = CurrentNB->DataLength;
 		BOOLEAN Dropped = FALSE;
 		PNET_BUFFER_LIST IndicateNBL;
+		BYTE* IndicatePacketBuffer = NULL;
+		PMDL IndicatePacketBufferMDL = NULL;
 
 		do {
 			if (DataLength == 0 || DataLength > PacketBufferLength) {
@@ -358,7 +390,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			EthDataPtr = NdisGetDataBuffer(CurrentNB, DataLength, PacketBuffer, 1, 0);
 			//If data in NB is contiguous, system will not auto copy the data, which means we should copy them manually
 			if (EthDataPtr != (PacketBuffer)) {
-				NdisMoveMemory((BYTE*)PacketBuffer, EthDataPtr, DataLength);
+				RtlCopyMemory((BYTE*)PacketBuffer, EthDataPtr, DataLength);
 			}
 
 
@@ -386,7 +418,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 
 
-			// Todo routing decision
+			// TODO: routing decision
 
 
 
@@ -415,27 +447,64 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			IndicateNBL = CurrentNBL;
 
 			if (PreroutingFilterResult.Modified || InputFilterResult.Modified) {
-				// TODO
 				// The hook function modified the buffer
 				// We need assign a new NBl for the Packet
-				
+				// First, create a new buffer 
+				IndicatePacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, DataLength, NET_PACKET_ALLOC_TAG);
+				if (IndicatePacketBuffer == NULL) {
+					// Error occurred! Drop this packet
+					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					break;
+				}
+				// Second, Allocate an MDL for the buffer and copy the data
+				IndicatePacketBufferMDL = NdisAllocateMdl(FilterContext->FilterHandle, IndicatePacketBuffer, DataLength);
+				if (IndicatePacketBufferMDL == NULL) {
+					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
+					// Error occurred! Drop this packet
+					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					break;
+				}
+				RtlZeroMemory(IndicatePacketBuffer, DataLength);
+				RtlCopyMemory(IndicatePacketBuffer, PacketBuffer, DataLength);
+				// Finally, allocate NBL and NB.
+				IndicateNBL = NdisAllocateNetBufferAndNetBufferList(FilterContext->NBLPool, 0, 0, IndicatePacketBufferMDL, 0, DataLength);
+				if (IndicateNBL == NULL) {
+					// Error occurred! Drop this packet
+					NdisFreeMdl(IndicatePacketBufferMDL);
+					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
+					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					break;
+				}
+
+				// Set properties of new NBL
+				IndicateNBL->SourceHandle = FilterContext->FilterHandle;
+				NdisCopyReceiveNetBufferListInfo(IndicateNBL, CurrentNBL);
+
 			}
+
+
 			// Indicate up this packet
 			AcceptListNBLCnt++;
 			if (!CanNotPend) {
 				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, IndicateNBL);
 				break;
 			}
+
 			// if (CanNotPend) :
 			// For each NBL that is NOT dropped, temporarily unlink it from the linked list.
 			NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = NULL;
 			// Indicate it up alone with NdisFIndicateReceiveNetBufferLists and the NDIS_RECEIVE_FLAGS_RESOURCES flag set.
 			NdisFIndicateReceiveNetBufferLists(FilterContext->FilterHandle, IndicateNBL, PortNumber,
 				1, ReceiveFlags | NDIS_RECEIVE_FLAGS_RESOURCES);
-			// Then immediately relink the NBL back into the chain.
-			NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = TempNBL;
-			
-			//TODO free the packet if we allocate it.
+
+			// IndicateNBL was not been created by us.
+			if (IndicateNBL->SourceHandle != FilterContext->FilterHandle) {
+				// Then immediately relink the NBL back into the chain.
+				NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = TempNBL;
+				break;
+			}
+			// Uur NBL, Free it!
+			FreeSingleNBL(IndicateNBL);
 
 		} while (FALSE);
 
@@ -465,19 +534,37 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 }
 
 
-VOID WPFilterSendToUpperFinished(NDIS_HANDLE FilterModuleContext, NET_BUFFER_LIST* NetBufferLists, ULONG returnFlags) {
+VOID WPFilterSendToUpperFinished(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, ULONG ReturnFlags) {
 
-	FILTER_CONTEXT* filterContext = (FILTER_CONTEXT*)FilterModuleContext;
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
+	PNET_BUFFER_LIST NBLHeader = NetBufferLists;
 
-	//WPFilterFreeNBL(filterContext, NetBufferLists);
-	NdisFReturnNetBufferLists(filterContext->FilterHandle, NetBufferLists, returnFlags);
+	// If your filter injected any send packets,
+	// you MUST identify their NBLs here and remove them from the chain.
+	NBLHeader = RemoveNBLsAllocatedByFilterFromNBLChain(FilterContext, NBLHeader);
+
+	// Return the received NBLs.  
+	// If you removed any NBLs from the chain, make sure the chain isn't empty.
+	if (NBLHeader == NULL) {
+		return;
+	}
+	NdisFReturnNetBufferLists(FilterContext->FilterHandle, NBLHeader, ReturnFlags);
 }
 
 
-VOID WPFilterSendToNICFinished(NDIS_HANDLE FilterModuleContext, NET_BUFFER_LIST* NetBufferLists, ULONG sendCompleteFlags) {
+VOID WPFilterSendToNICFinished(NDIS_HANDLE FilterModuleContext, NET_BUFFER_LIST* NetBufferLists, ULONG SendCompleteFlags) {
 
-	FILTER_CONTEXT* filterContext = (FILTER_CONTEXT*)FilterModuleContext;
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
+	PNET_BUFFER_LIST NBLHeader = NetBufferLists;
 
-	//WPFilterFreeNBL(filterContext, NetBufferLists);
-	NdisFSendNetBufferListsComplete(filterContext->FilterHandle, NetBufferLists, sendCompleteFlags);
+	// If your filter injected any send packets,
+	// you MUST identify their NBLs here and remove them from the chain.
+	NBLHeader = RemoveNBLsAllocatedByFilterFromNBLChain(FilterContext, NBLHeader);
+
+	// Send complete the NBLs.  
+	// If you removed any NBLs from the chain, make sure the chain isn't empty.
+	if (NBLHeader == NULL) {
+		return;
+	}
+	NdisFSendNetBufferListsComplete(FilterContext->FilterHandle, NetBufferLists, SendCompleteFlags);
 }
