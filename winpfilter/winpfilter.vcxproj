@@ -120,6 +120,7 @@
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="global_variables.c" />
     <ClCompile Include="hook_manager.c" />
     <ClCompile Include="filter_subroutines.c" />
     <ClCompile Include="ip.c" />
@@ -130,6 +131,7 @@
   <ItemGroup>
     <ClInclude Include="include\converter.h" />
     <ClInclude Include="include\filter_subroutines.h" />
+    <ClInclude Include="include\global_variables.h" />
     <ClInclude Include="include\hook_manager.h" />
     <ClInclude Include="include\net\ether.h" />
     <ClInclude Include="include\net\ip.h" />

@@ -25,6 +25,7 @@ VOID InitializeIPAddressBySockAddrINet(PIP_ADDRESS IPAddress,PSOCKADDR_INET Sock
 			PrefixLength = IPV4_ADDRESS_BIT_LENGTH;
 		RtlCopyMemory(IPAddress->IPV4Address.AddressBytes, &SockAddress->Ipv4.sin_addr.s_addr, IPV4_ADDRESS_BYTE_LENGTH);
 		RtlCopyMemory(IPAddress->IPV4NetworkSegment.AddressBytes, &SockAddress->Ipv4.sin_addr.s_addr, IPV4_ADDRESS_BYTE_LENGTH);
+		IPAddress->IPV4BroadcastAddress.AddressInt32 = CONVERT_NETE_32(CONVERT_NETE_32(IPAddress->IPV4BroadcastAddress.AddressInt32) | (0xffffffff) >> PrefixLength);
 	}
 	else {
 		IPAddress->Family = IPV6;

@@ -19,6 +19,7 @@ typedef struct _IP_ADDRESS {
 		IPV4_ADDRESS	IPV4NetworkSegment;
 		IPV6_ADDRESS	IPV6NetworkSegment;
 	};
+	IPV4_ADDRESS	IPV4BroadcastAddress;
 }IP_ADDRESS, *PIP_ADDRESS;
 
 

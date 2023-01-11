@@ -21,3 +21,5 @@ typedef struct _ETH_HEADER
 #define ETH_HEADER_PROTOCOL(header)						(CONVERT_NETE_16((header)->Protocol))
 
 #define SET_ETH_HEADER_PROTOCOL(header,protocol)		((header)->Protocol = CONVERT_NETE_16(protocol))
+
+#define GetNetworkLayerHeaderFromEtherHeader(ethheader)		((BYTE*)(((BYTE*)ethheader) + sizeof(ETH_HEADER)))

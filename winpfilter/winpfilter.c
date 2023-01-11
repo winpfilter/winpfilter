@@ -8,15 +8,7 @@
 #include "filter_subroutines.h"
 #include "route.h"
 #include "hook_manager.h"
-
-NDIS_HANDLE FilterDriverHandle = NULL;
-NDIS_HANDLE FilterDriverObject = NULL;
-
-
-NDIS_SPIN_LOCK FilterListLock;
-LIST_ENTRY FilterModuleList;
-
-DEVICE_OBJECT* WPFilterCommunicationDevice;
+#include "global_variables.h"
 
 
 VOID DriverUnload(PDRIVER_OBJECT driverObject) {
@@ -170,7 +162,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 			StopMonitorSystemRouteTableChange();
 			break;
 		}
-
 
 		//Set the IRP dispatch subroutines for driver
 		/*driverObject->MajorFunction[IRP_MJ_CREATE] = WPTCommDeviceCreate;

@@ -7,13 +7,10 @@
 #include "winpfilter.h"
 #include "filter_subroutines.h"
 #include "hook_manager.h"
+#include "route.h"
+#include "global_variables.h"
 #include "net/ether.h"
-
-extern NDIS_HANDLE FilterDriverObject;
-extern NDIS_HANDLE FilterDriverHandle;
-
-extern NDIS_SPIN_LOCK FilterListLock;
-extern LIST_ENTRY FilterModuleList;
+#include "net/ip.h"
 
 VOID FreeSingleNBL(PNET_BUFFER_LIST NetBufferList);
 
@@ -135,7 +132,7 @@ NDIS_STATUS WPFilterAttach(NDIS_HANDLE ndisfilterHandle, NDIS_HANDLE filterDrive
 		NdisMoveMemory(filterContext->MacAddress, attachParameters->CurrentMacAddress, NDIS_MAX_PHYS_ADDRESS_LENGTH);
 		filterContext->MacLength = (BYTE)(attachParameters->MacAddressLength & 0xFF);
 
-		filterContext->MiniportIfIndex = attachParameters->BaseMiniportIfIndex;
+		filterContext->BasePortLuid = attachParameters->BaseMiniportNetLuid;
 
 		NDIS_FILTER_ATTRIBUTES filterAttributes;
 		NdisZeroMemory(&filterAttributes, sizeof(NDIS_FILTER_ATTRIBUTES));
@@ -270,43 +267,6 @@ NDIS_STATUS WPFilterSetModuleOptions(NDIS_HANDLE FilterModuleContext) {
 	return status;
 }
 
-VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER portNumber, ULONG sendFlags) {
-
-	FILTER_CONTEXT* filterContext = (FILTER_CONTEXT*)FilterModuleContext;
-	BOOLEAN dispatchLevel;
-
-	for (NET_BUFFER_LIST* currNBL = NetBufferLists; currNBL != NULL; currNBL = NET_BUFFER_LIST_NEXT_NBL(currNBL)) {
-		for (NET_BUFFER* currNB = NET_BUFFER_LIST_FIRST_NB(currNBL); currNB != NULL; currNB = NET_BUFFER_NEXT_NB(currNB)) {
-
-			BYTE* PacketBuffer;
-			ULONG PacketBufferLength;
-
-			if (currNB->DataLength <= 0) {
-				//It must not occurr
-				continue;
-			}
-			PacketBufferLength = max(filterContext->MaxFrameSize, currNB->DataLength);
-			PacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, PacketBufferLength, NET_PACKET_ALLOC_TAG);
-			if (PacketBuffer == NULL) {
-				//Error occurr
-				continue;
-			}
-			BYTE* ethDataPtr = NdisGetDataBuffer(currNB, currNB->DataLength, PacketBuffer, 1, 0);
-			//If data in NB is contiguous, system will not auto copy the data, which means we should copy them manually
-			if (ethDataPtr != (PacketBuffer)) {
-				NdisMoveMemory((BYTE*)PacketBuffer, ethDataPtr, currNB->DataLength);
-			}
-
-
-			ExFreePoolWithTag(PacketBuffer, NET_PACKET_ALLOC_TAG);
-		}
-	}
-
-	//NdisFSendNetBufferListsComplete(filterContext->FilterHandle, NetBufferLists, sendFlags);
-	NdisFSendNetBufferLists(filterContext->FilterHandle, NetBufferLists, portNumber, sendFlags);
-
-}
-
 #define LinkSingleNBLIntoNBLChainTail(ChainHead,ChainTail,SingleNBLNode) {	\
 	NET_BUFFER_LIST_NEXT_NBL(SingleNBLNode) = NULL;							\
 	if (ChainHead == NULL || ChainTail == NULL) {							\
@@ -331,6 +291,112 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 		DropCounter++;																			\
 		DroppedFlag = TRUE;																		\
 	}																							\
+}
+
+VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER PortNumber, ULONG SendFlags) {
+
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
+	BOOLEAN DispatchLevel = NDIS_TEST_SEND_AT_DISPATCH_LEVEL(SendFlags);
+
+	PNET_BUFFER_LIST AcceptListHead = NULL;
+	PNET_BUFFER_LIST AcceptListTail = NULL;
+
+	for (NET_BUFFER_LIST* CurrentNBL = NetBufferLists; CurrentNBL != NULL; CurrentNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL)) {
+		for (NET_BUFFER* CurrentNB = NET_BUFFER_LIST_FIRST_NB(CurrentNBL); CurrentNB != NULL; CurrentNB = NET_BUFFER_NEXT_NB(CurrentNB)) {
+
+			BOOLEAN FreeFlag = TRUE;
+			BYTE* EthDataPtr;
+			ULONG DataLength = CurrentNB->DataLength;
+			ULONG PacketBufferLength = DataLength;
+			BYTE* PacketBuffer;
+			HOOK_RESULT OutputFilterResult;
+			HOOK_RESULT PostroutingFilterResult;
+			PMDL PostroutingMDL;
+			PNET_BUFFER_LIST PostroutingNBL;
+
+			if (DataLength == 0) {
+				continue;
+			} 
+			PacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, PacketBufferLength, NET_PACKET_ALLOC_TAG);
+			if (PacketBuffer == NULL) {
+				continue;
+			}
+			RtlZeroMemory(PacketBuffer, PacketBufferLength);
+			EthDataPtr = NdisGetDataBuffer(CurrentNB, DataLength, PacketBuffer, 1, 0);
+			//If data in NB is contiguous, system will not auto copy the data, which means we should copy them manually
+			if (EthDataPtr != (PacketBuffer)) {
+				RtlCopyMemory(PacketBuffer, EthDataPtr, DataLength);
+			}
+
+			do
+			{
+				/*========== THE OUTPUT FILTER POINT ==========*/
+				OutputFilterResult = FilterEthernetPacket(
+					PacketBuffer,
+					&DataLength,
+					PacketBufferLength,
+					FILTER_POINT_OUTPUT,
+					FilterContext->BasePortLuid,
+					DispatchLevel
+				);
+				/*========== END OUTPUT FILTER POINT ==========*/
+
+				if ((!OutputFilterResult.Accept) && (!OutputFilterResult.Modified)) {
+					break;
+				}
+
+				/*========== THE POSTROUTING FILTER POINT ==========*/
+				PostroutingFilterResult = FilterEthernetPacket(
+					PacketBuffer,
+					&DataLength,
+					PacketBufferLength,
+					FILTER_POINT_POSTROUTING,
+					FilterContext->BasePortLuid,
+					DispatchLevel
+				);
+				/*========== END POSTROUTING FILTER POINT ==========*/
+				if ((!PostroutingFilterResult.Accept) && (!PostroutingFilterResult.Modified)) {
+					break;
+				}
+
+				PostroutingMDL = NdisAllocateMdl(FilterContext->FilterHandle, PacketBuffer, PacketBufferLength);
+				if (PostroutingMDL == NULL) {					
+					break;
+				}
+				PostroutingNBL = NdisAllocateNetBufferAndNetBufferList(FilterContext->NBLPool, 0, 0, PostroutingMDL, 0, DataLength);
+				if (PostroutingNBL == NULL) {
+					NdisFreeMdl(PostroutingMDL);
+					break;
+				}
+
+				// Set properties of new NBL
+				PostroutingNBL->SourceHandle = FilterContext->FilterHandle;
+				NdisCopySendNetBufferListInfo(PostroutingNBL, CurrentNBL);
+
+				/*
+				NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
+				ChecksumOffloadInfo.Value = 0;
+				ChecksumOffloadInfo.Receive.IpChecksumSucceeded = PassModifiedRxPacketWithBadIPChecksum;
+				ChecksumOffloadInfo.Receive.TcpChecksumSucceeded = PassModifiedRxPacketWithBadTCPChecksum;
+				ChecksumOffloadInfo.Receive.UdpChecksumSucceeded = PassModifiedRxPacketWithBadUDPChecksum;
+				PostroutingNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
+				*/
+
+				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, PostroutingNBL);
+				FreeFlag = FALSE;
+			} while (FALSE);
+
+			if (FreeFlag) {
+				ExFreePoolWithTag(PacketBuffer, NET_PACKET_ALLOC_TAG);
+			}
+
+		}
+	}
+
+	NdisFSendNetBufferListsComplete(FilterContext->FilterHandle, NetBufferLists, SendFlags);
+	if (AcceptListHead != NULL) {
+		NdisFSendNetBufferLists(FilterContext->FilterHandle, AcceptListHead, PortNumber, SendFlags);
+	}
 }
 
 VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER PortNumber, ULONG NumberOfNetBufferLists, ULONG ReceiveFlags) {
@@ -365,32 +431,42 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 	while (CurrentNBL != NULL) {
 		// Note: on the receive path for Ethernet packets, one NBL will have exactly one NB. 
-		// So you do not need to worry about dropping one NB, but trying to indicate up the remaining NBs on the same NBL.
+		// So you do not need to worry about dropping one NB, 
+		// but trying to indicate up the remaining NBs on the same NBL.
 		// In other words, if the first NB should be dropped, drop the whole NBL.
 		PNET_BUFFER CurrentNB = NET_BUFFER_LIST_FIRST_NB(CurrentNBL);
 
 		PNET_BUFFER_LIST TempNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
 		BYTE* EthDataPtr;
+
 		HOOK_RESULT PreroutingFilterResult;
 		HOOK_RESULT InputFilterResult;
 		ULONG DataLength = CurrentNB->DataLength;
 		BOOLEAN Dropped = FALSE;
+
 		PNET_BUFFER_LIST IndicateNBL;
 		BYTE* IndicatePacketBuffer = NULL;
 		PMDL IndicatePacketBufferMDL = NULL;
 
+		PETH_HEADER EtherHeader = (PETH_HEADER)PacketBuffer;
+		BYTE* IpHeader = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
+		BYTE* DestIpAddressBytes;
+		USHORT EtherProtocol;
+
 		do {
 			if (DataLength == 0 || DataLength > PacketBufferLength) {
-				//It must not occurr. Return the NBL.
+				// It must not occurr. Return the NBL.
+				TRACE_DBG("a\n");
 				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt,Dropped);
 				break;
 			}
 
 			RtlZeroMemory(PacketBuffer, PacketBufferLength);
 			EthDataPtr = NdisGetDataBuffer(CurrentNB, DataLength, PacketBuffer, 1, 0);
-			//If data in NB is contiguous, system will not auto copy the data, which means we should copy them manually
+			// If data in NB is contiguous, 
+			// system will not auto copy the data, which means we should copy them manually
 			if (EthDataPtr != (PacketBuffer)) {
-				RtlCopyMemory((BYTE*)PacketBuffer, EthDataPtr, DataLength);
+				RtlCopyMemory(PacketBuffer, EthDataPtr, DataLength);
 			}
 
 
@@ -400,12 +476,13 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 						&DataLength, 
 						PacketBufferLength,
 						FILTER_POINT_PREROUTING,
-						FilterContext->MiniportIfIndex,
+						FilterContext->BasePortLuid,
 						DispatchLevel
 					);
 			
 			if (!PreroutingFilterResult.Accept) {
 				// Drop this packet
+				TRACE_DBG("b\n");
 				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 
 				// If not modified, go next packet, otherwise continue process this one
@@ -415,12 +492,30 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			}
 			/*========== END PRE_ROUTING FILTER POINT ==========*/
 
+			
+			//PIPV6_HEADER Ipv6Header = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
+			EtherProtocol = ETH_HEADER_PROTOCOL(EtherHeader);
+			if (AllowIPForwarding && (EtherProtocol  == ETH_PROTOCOL_IP || EtherProtocol == ETH_PROTOCOL_IPV6)) {
 
 
+				if (EtherProtocol == ETH_PROTOCOL_IP) {
+					// IPv4
+					DestIpAddressBytes = ((PIPV4_HEADER)IpHeader)->DestAddress.AddressBytes;
+				}
+				else {
+					// IPv6
+					DestIpAddressBytes = ((PIPV6_HEADER)IpHeader)->DestAddress.AddressBytes;
+				}
 
-			// TODO: routing decision
+				if (IsValidForwardAddress(ETH_HEADER_PROTOCOL(EtherHeader),FilterContext->BasePortLuid, DestIpAddressBytes)) {
+			
+					//ForwardPacket(ETH_HEADER_PROTOCOL(EtherHeader), DestIpAddressBytes, PacketBuffer, DataLength);
 
-
+					TRACE_DBG("c\n");
+					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					break;
+				}
+			}
 
 
 			/*========== THE INPUT FILTER POINT ==========*/
@@ -429,12 +524,13 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				&DataLength,
 				PacketBufferLength,
 				FILTER_POINT_INPUT,
-				FilterContext->MiniportIfIndex,
+				FilterContext->BasePortLuid,
 				DispatchLevel
 			);
 
 			if (!InputFilterResult.Accept) {
 				// Drop this packet
+				TRACE_DBG("d\n");
 				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 
 				// If not modified, go next packet, otherwise continue process this one
@@ -453,6 +549,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				IndicatePacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, DataLength, NET_PACKET_ALLOC_TAG);
 				if (IndicatePacketBuffer == NULL) {
 					// Error occurred! Drop this packet
+					TRACE_DBG("e\n");
 					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 					break;
 				}
@@ -461,6 +558,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				if (IndicatePacketBufferMDL == NULL) {
 					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
 					// Error occurred! Drop this packet
+					TRACE_DBG("f\n");
 					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 					break;
 				}
@@ -472,13 +570,19 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					// Error occurred! Drop this packet
 					NdisFreeMdl(IndicatePacketBufferMDL);
 					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
+					TRACE_DBG("g\n");
 					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 					break;
 				}
 
 				// Set properties of new NBL
 				IndicateNBL->SourceHandle = FilterContext->FilterHandle;
-				NdisCopyReceiveNetBufferListInfo(IndicateNBL, CurrentNBL);
+				NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
+				ChecksumOffloadInfo.Value = 0;
+				ChecksumOffloadInfo.Receive.IpChecksumSucceeded = PassModifiedRxPacketWithBadIPChecksum;
+				ChecksumOffloadInfo.Receive.TcpChecksumSucceeded = PassModifiedRxPacketWithBadTCPChecksum;
+				ChecksumOffloadInfo.Receive.UdpChecksumSucceeded = PassModifiedRxPacketWithBadUDPChecksum;
+				IndicateNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
 
 			}
 
@@ -503,7 +607,8 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = TempNBL;
 				break;
 			}
-			// Uur NBL, Free it!
+
+			// Our NBL, Free it!
 			FreeSingleNBL(IndicateNBL);
 
 		} while (FALSE);

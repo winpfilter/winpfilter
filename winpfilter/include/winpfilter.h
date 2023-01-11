@@ -53,7 +53,7 @@ typedef struct _FILTER_CONTEXT {
     //Reference to this filter
     NDIS_HANDLE FilterHandle;
     ULONG       MaxFrameSize;
-    NET_IFINDEX MiniportIfIndex;
+    NET_LUID    BasePortLuid;
 
     BYTE MacAddress[NDIS_MAX_PHYS_ADDRESS_LENGTH];
     BYTE MacLength;

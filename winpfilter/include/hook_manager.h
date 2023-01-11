@@ -14,10 +14,10 @@ typedef ULONG FILTER_PONIT;
 
 typedef ULONG HOOK_ACTION;
 
-//ULONG HOOKFUNCTION(ULONG InterfaceID,FILTER_PONIT FilterPoint,ULONG BufferLength,PHOOK_DATA Data);
+//ULONG HOOKFUNCTION(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
 //At most time BufferLength = MTU
 //The hook function can modify the hook_data but make sure DataLength <= BufferLength
-typedef HOOK_ACTION(*HOOK_FUNCTION)(ULONG InterfaceID, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
+typedef HOOK_ACTION(*HOOK_FUNCTION)(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
 
 // HOOK_ACTION values
 // Drop the packet 
@@ -52,7 +52,7 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT F
 VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint);
 VOID UnregisterAllHooks(FILTER_PONIT FilterPoint);
 VOID FreeFilterHookManager();
-HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength, ULONG BufferLength, FILTER_PONIT FilterPoint, ULONG InterfaceIndex, UCHAR DispatchLevel);
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength, ULONG BufferLength, FILTER_PONIT FilterPoint, NET_LUID InterfaceIndex, UCHAR DispatchLevel);
 
 #ifdef DBG
 VOID PrintHookTable();

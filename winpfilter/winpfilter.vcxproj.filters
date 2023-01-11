@@ -45,6 +45,9 @@
     <ClCompile Include="hook_manager.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="global_variables.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\net\ether.h">
@@ -81,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\hook_manager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\global_variables.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

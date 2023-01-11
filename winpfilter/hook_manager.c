@@ -150,7 +150,7 @@ VOID UnregisterAllHooks(FILTER_PONIT FilterPoint) {
 
 }
 
-HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG BufferLength, FILTER_PONIT FilterPoint,ULONG InterfaceIndex,UCHAR DispatchLevel) {
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG BufferLength, FILTER_PONIT FilterPoint, NET_LUID InterfaceLuid,UCHAR DispatchLevel) {
 
 	LOCK_STATE_EX LockState;
 	HOOK_RESULT Result;
@@ -170,7 +170,7 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG B
 		) {
 
 		CurrentEntry = CONTAINING_RECORD(Hook, HOOK_ENTRY, HookLink);
-		Action = (*CurrentEntry->HookFunction)(InterfaceIndex, FilterPoint, BufferLength, EthernetBuffer, DataLength);
+		Action = (*CurrentEntry->HookFunction)(InterfaceLuid, FilterPoint, BufferLength, EthernetBuffer, DataLength);
 		switch (Action)
 		{
 		case HOOK_ACTION_ACCEPT:
@@ -190,6 +190,11 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG B
 			TruncateChainFlag = TRUE;
 			break;
 		}
+		if (*DataLength > BufferLength) {
+			Result.Accept = FALSE;
+			Result.Modified = FALSE;
+			TruncateChainFlag = TRUE;
+		}
 		// Exit loop if TruncateChainFlag set 
 		if (TruncateChainFlag) {
 			break;
@@ -197,7 +202,7 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG B
 	}
 
 	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
-
+	
 	// When the buffer been modified, create a new NBL and then drop the old one.
 	if (Result.Modified) {
 		Result.Accept = FALSE;
