@@ -11,17 +11,19 @@
 #include "global_variables.h"
 
 
-VOID DriverUnload(PDRIVER_OBJECT driverObject) {
+VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 	UNICODE_STRING DeviceLink = (UNICODE_STRING)RTL_CONSTANT_STRING(WINPFILTER_COMMUNICATION_DEVICE_LINK);
 
 	TRACE_ENTER();
 
-	NdisFreeSpinLock(&FilterListLock);
-	NdisFDeregisterFilterDriver(FilterDriverHandle);
 	IoDeleteSymbolicLink(&DeviceLink);
 	IoDeleteDevice(WPFilterCommunicationDevice);
-	StopMonitorSystemRouteTableChange();
 	FreeFilterHookManager();
+	StopMonitorUnicastIpChange();
+	StopMonitorSystemRouteTableChange();
+	NdisFDeregisterFilterDriver(FilterDriverHandle);
+	FreeInterfaceIPCache();
+	NdisFreeSpinLock(&FilterListLock);
 
 	TRACE_EXIT();
 }
@@ -98,6 +100,9 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 			break;
 		}
 
+		//Init driver dispatch subroutine
+		DriverObject->DriverUnload = DriverUnload;
+
 		//Prepare the variables used in NDIS filter driver registration
 		InitWPFilter(&FChars);
 
@@ -105,6 +110,12 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		NdisAllocateSpinLock(&FilterListLock);
 		InitializeListHead(&FilterModuleList);
 
+
+		Status = InitializeInterfaceIPCache(FilterDriverObject);
+		if (!NT_SUCCESS(Status)) {
+			NdisFreeSpinLock(&FilterListLock);
+			break;
+		}
 		//Register the NDIS filter driver
 		FilterDriverHandle = NULL;
 		FilterDriverObject = DriverObject;
@@ -113,53 +124,68 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 
 		//Check if the NDIS filter driver registered successful
 		if (!NT_SUCCESS(Status)) {
+			FreeInterfaceIPCache();
 			NdisFreeSpinLock(&FilterListLock);
 			break;
 		}
-
-		//Init driver dispatch subroutine
-		DriverObject->DriverUnload = DriverUnload;
-
-		//Create the device to communicate with Ring3 
-		Status = IoCreateDeviceSecure(DriverObject, 0, &DeviceName, 
-			FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, 
-			&SDDLKernelOnly, (LPCGUID)&WPFilterDeviceGUID, &WPFilterCommunicationDevice);
-
-		if (!NT_SUCCESS(Status)) {
-			NdisFreeSpinLock(&FilterListLock);
-			NdisFDeregisterFilterDriver(FilterDriverHandle);
-			break;
-		}
-
-		//Create a symbolic link for the device
-		Status = IoCreateSymbolicLink(&DeviceLink, &DeviceName);
-		if (!NT_SUCCESS(Status)) {
-			NdisFreeSpinLock(&FilterListLock);
-			NdisFDeregisterFilterDriver(FilterDriverHandle);
-			IoDeleteDevice(WPFilterCommunicationDevice);
-			break;
-		}
-
 
 		//Monitor route table change
 		//WPFilterRouteTableChangeNotifyHandle = &row;
 		Status = StartMonitorSystemRouteTableChange();
 
 		if (!NT_SUCCESS(Status)) {
-			NdisFreeSpinLock(&FilterListLock);
 			NdisFDeregisterFilterDriver(FilterDriverHandle);
-			IoDeleteDevice(WPFilterCommunicationDevice);
-			IoDeleteSymbolicLink(&DeviceLink);
+			FreeInterfaceIPCache();
+			NdisFreeSpinLock(&FilterListLock);
+			break;
+		}
+
+		Status = StartMonitorUnicastIpChange();
+
+		if (!NT_SUCCESS(Status)) {
+			StopMonitorSystemRouteTableChange();
+			NdisFDeregisterFilterDriver(FilterDriverHandle);
+			FreeInterfaceIPCache();
+			NdisFreeSpinLock(&FilterListLock);
 			break;
 		}
 
 		Status = InitializeFilterHookManager(FilterDriverObject);
 		if (!NT_SUCCESS(Status)) {
-			NdisFreeSpinLock(&FilterListLock);
-			NdisFDeregisterFilterDriver(FilterDriverHandle);
-			IoDeleteDevice(WPFilterCommunicationDevice);
-			IoDeleteSymbolicLink(&DeviceLink);
+			StopMonitorUnicastIpChange();
 			StopMonitorSystemRouteTableChange();
+			NdisFDeregisterFilterDriver(FilterDriverHandle);
+			FreeInterfaceIPCache();
+			NdisFreeSpinLock(&FilterListLock);
+			break;
+		}
+
+
+		//Create the device to communicate with Ring3 
+		Status = IoCreateDeviceSecure(DriverObject, 0, &DeviceName,
+			FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE,
+			&SDDLKernelOnly, (LPCGUID)&WPFilterDeviceGUID, &WPFilterCommunicationDevice);
+
+		if (!NT_SUCCESS(Status)) {
+			FreeFilterHookManager();
+			StopMonitorUnicastIpChange();
+			StopMonitorSystemRouteTableChange();
+			NdisFDeregisterFilterDriver(FilterDriverHandle);
+			FreeInterfaceIPCache();
+			NdisFreeSpinLock(&FilterListLock);
+			break;
+		}
+
+		//Create a symbolic link for the device
+		Status = IoCreateSymbolicLink(&DeviceLink, &DeviceName);
+		if (!NT_SUCCESS(Status)) {
+			IoDeleteDevice(WPFilterCommunicationDevice);
+			FreeFilterHookManager();
+			StopMonitorUnicastIpChange();
+			StopMonitorSystemRouteTableChange();
+			NdisFDeregisterFilterDriver(FilterDriverHandle);
+			FreeInterfaceIPCache();
+			NdisFreeSpinLock(&FilterListLock);
 			break;
 		}
 
@@ -173,7 +199,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 
 	} while (FALSE);
 
-
+	
 
 	TRACE_EXIT();
 	TRACE_DBG("%X\n", Status);

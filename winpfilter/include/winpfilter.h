@@ -23,9 +23,10 @@
 #define WINPFILTER_COMMUNICATION_DEVICE_NAME L"\\Device\\WinpfilterCommunicationDevice"
 #define WINPFILTER_COMMUNICATION_DEVICE_LINK L"\\??\\winpfilter_com_device"
 
-#define FILTER_ALLOC_TAG 'FTAT'
-#define SEND_POOL_ALLOC_TAG 'SPAT'
+#define FILTER_CONTEXT_ALLOC_TAG 'TACF'
+#define NET_BUFFER_LIST_POOL_ALLOC_TAG 'PLBN'
 #define NET_PACKET_ALLOC_TAG 'APPN'
+#define IP_LINK_ALLOC_TAG 'TALI'
 #define ROUTE_TABLE_ALLOC_TAG 'TATR'
 #define HOOK_ENTRY_ALLOC_TAG 'TAEH'
 
@@ -46,6 +47,7 @@ typedef enum _FILTER_STATE {
 
 
 
+
 typedef struct _FILTER_CONTEXT {
 
     LIST_ENTRY FilterModuleLink;
@@ -54,15 +56,16 @@ typedef struct _FILTER_CONTEXT {
     NDIS_HANDLE FilterHandle;
     ULONG       MaxFrameSize;
     NET_LUID    BasePortLuid;
+    IF_INDEX    BasePortIndex;
+    PNDIS_OFFLOAD OffloadConfig;
 
     BYTE MacAddress[NDIS_MAX_PHYS_ADDRESS_LENGTH];
     BYTE MacLength;
 
-    NDIS_SPIN_LOCK FilterLock;    // filterLock for protection of state and outstanding sends and recvs
-
-    FILTER_STATE FilterState;   // Which state the filter is in
-
     NDIS_HANDLE NBLPool;
+
+    NDIS_SPIN_LOCK FilterLock;    // filterLock for protection of state and outstanding sends and recvs
+    FILTER_STATE FilterState;   // Which state the filter is in
 
 }FILTER_CONTEXT,*PFILTER_CONTEXT;
 

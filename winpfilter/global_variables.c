@@ -1,5 +1,4 @@
-#include "winpfilter.h"
-
+#include "global_variables.h"
 NDIS_HANDLE FilterDriverHandle = NULL;
 NDIS_HANDLE FilterDriverObject = NULL;
 
@@ -8,8 +7,12 @@ LIST_ENTRY FilterModuleList;
 
 DEVICE_OBJECT* WPFilterCommunicationDevice;
 
-BOOLEAN PassModifiedRxPacketWithBadIPChecksum = TRUE;
-BOOLEAN PassModifiedRxPacketWithBadTCPChecksum = TRUE;
-BOOLEAN PassModifiedRxPacketWithBadUDPChecksum = TRUE;
+BOOLEAN IndicateModifiedRxPacketWithBadIPChecksumAsGood = TRUE;
+BOOLEAN IndicateModifiedRxPacketWithBadTCPChecksumAsGood = TRUE;
+BOOLEAN IndicateModifiedRxPacketWithBadUDPChecksumAsGood = TRUE;
+
+BOOLEAN TryCalcModifiedTxPacketIPChecksumByNIC = TRUE;
+BOOLEAN TryCalcModifiedTxPacketTCPChecksumByNIC = TRUE;
+BOOLEAN TryCalcModifiedTxPacketUDPChecksumByNIC = TRUE;
 
 BOOLEAN AllowIPForwarding = FALSE;

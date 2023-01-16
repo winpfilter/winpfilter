@@ -23,6 +23,12 @@ typedef struct _IP_ADDRESS {
 }IP_ADDRESS, *PIP_ADDRESS;
 
 
+typedef struct _IP_ADDRESS_LINK {
+	LIST_ENTRY Link;
+	IP_ADDRESS Address;
+}IP_ADDRESS_LINK, * PIP_ADDRESS_LINK;
+
+
 typedef enum _IP_PROTOCOLS
 {
 	IP					= 0,

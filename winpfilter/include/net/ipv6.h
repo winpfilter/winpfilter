@@ -8,10 +8,12 @@
 typedef struct _IPV6_ADDRESS {
 	union
 	{
-		BYTE	AddressBytes[16];
-		USHORT	AddressWords[8];
+		BYTE		AddressBytes[16];
+		USHORT		AddressWords[8];
+		ULONG		AddressDwords[4];
+		ULONGLONG	AddressQwords[2];
 	};
-}IPV6_ADDRESS, PIPV6_ADDRESS;
+}IPV6_ADDRESS, *PIPV6_ADDRESS;
 #define IPV6_ADDRESS_BYTE_LENGTH 16
 #define IPV6_ADDRESS_BIT_LENGTH 128
 typedef struct _IPV6_HEADER {

@@ -1,4 +1,6 @@
 #pragma once
+#include "winpfilter.h"
+#include "interface_ip_table.h"
 
 extern NDIS_HANDLE FilterDriverHandle;
 extern NDIS_HANDLE FilterDriverObject;
@@ -8,8 +10,11 @@ extern LIST_ENTRY FilterModuleList;
 
 extern DEVICE_OBJECT* WPFilterCommunicationDevice;
 
-extern BOOLEAN PassModifiedRxPacketWithBadIPChecksum;
-extern BOOLEAN PassModifiedRxPacketWithBadTCPChecksum;
-extern BOOLEAN PassModifiedRxPacketWithBadUDPChecksum;
+extern BOOLEAN IndicateModifiedRxPacketWithBadIPChecksumAsGood;
+extern BOOLEAN IndicateModifiedRxPacketWithBadTCPChecksumAsGood;
+extern BOOLEAN IndicateModifiedRxPacketWithBadUDPChecksumAsGood;
+extern BOOLEAN TryCalcModifiedTxPacketIPChecksumByNIC;
+extern BOOLEAN TryCalcModifiedTxPacketTCPChecksumByNIC;
+extern BOOLEAN TryCalcModifiedTxPacketUDPChecksumByNIC;
 
 extern BOOLEAN AllowIPForwarding;

@@ -75,42 +75,41 @@ VOID FreeSingleNBL(PNET_BUFFER_LIST NetBufferList) {
 }
 
 
-NDIS_STATUS WPFilterAttach(NDIS_HANDLE ndisfilterHandle, NDIS_HANDLE filterDriverContext, NDIS_FILTER_ATTACH_PARAMETERS* attachParameters) {
+NDIS_STATUS WPFilterAttach(NDIS_HANDLE NdisFilterHandle, NDIS_HANDLE FilterDriverContext, PNDIS_FILTER_ATTACH_PARAMETERS AttachParameters) {
 
 	DbgPrint("WPFilterAttach\n");
 
-	FILTER_CONTEXT* filterContext = NULL;
-	NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+	PFILTER_CONTEXT FilterContext = NULL;
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
 
 	do
 	{
-		if (filterDriverContext != (NDIS_HANDLE)FilterDriverObject) {
-			status = NDIS_STATUS_INVALID_PARAMETER;
+		if (FilterDriverContext != (NDIS_HANDLE)FilterDriverObject) {
+			Status = NDIS_STATUS_INVALID_PARAMETER;
 			break;
 		}
 
 		// We only support IEEE802.3 here but may be add others later
-		if ((attachParameters->MiniportMediaType != NdisMedium802_3)
-			&& (attachParameters->MiniportMediaType != NdisMediumWan)
-			&& (attachParameters->MiniportMediaType != NdisMediumWirelessWan)) {
-
-			status = NDIS_STATUS_INVALID_PARAMETER;
+		if ((AttachParameters->MiniportMediaType != NdisMedium802_3)
+			&& (AttachParameters->MiniportMediaType != NdisMediumWan)
+			&& (AttachParameters->MiniportMediaType != NdisMediumWirelessWan)) {
+			Status = NDIS_STATUS_INVALID_PARAMETER;
 			break;
 		}
 
-		filterContext = (FILTER_CONTEXT*)NdisAllocateMemoryWithTagPriority(ndisfilterHandle, sizeof(FILTER_CONTEXT), FILTER_ALLOC_TAG, NormalPoolPriority);
-		if (filterContext == NULL) {
-			status = NDIS_STATUS_RESOURCES;
+		FilterContext = (PFILTER_CONTEXT)ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(FILTER_CONTEXT), FILTER_CONTEXT_ALLOC_TAG);
+		if (FilterContext == NULL) {
+			Status = NDIS_STATUS_RESOURCES;
 			break;
 		}
 
-		NdisZeroMemory(filterContext, sizeof(FILTER_CONTEXT));
+		NdisZeroMemory(FilterContext, sizeof(FILTER_CONTEXT));
 
 
-		filterContext->FilterHandle = ndisfilterHandle;
+		FilterContext->FilterHandle = NdisFilterHandle;
+		FilterContext->MaxFrameSize = 0;
 
-		filterContext->MaxFrameSize = 0;
-
+		
 
 		NET_BUFFER_LIST_POOL_PARAMETERS PoolParameters;
 		NdisZeroMemory(&PoolParameters, sizeof(NET_BUFFER_LIST_POOL_PARAMETERS));
@@ -120,133 +119,132 @@ NDIS_STATUS WPFilterAttach(NDIS_HANDLE ndisfilterHandle, NDIS_HANDLE filterDrive
 		PoolParameters.ProtocolId = NDIS_PROTOCOL_ID_DEFAULT;
 		PoolParameters.ContextSize = MEMORY_ALLOCATION_ALIGNMENT;
 		PoolParameters.fAllocateNetBuffer = TRUE;
-		PoolParameters.PoolTag = SEND_POOL_ALLOC_TAG;
-		filterContext->NBLPool = NdisAllocateNetBufferListPool(filterContext->FilterHandle, &PoolParameters);
+		PoolParameters.PoolTag = NET_BUFFER_LIST_POOL_ALLOC_TAG;
+		FilterContext->NBLPool = NdisAllocateNetBufferListPool(FilterContext->FilterHandle, &PoolParameters);
 
-		if (filterContext->NBLPool == NULL) {
-			status = NDIS_STATUS_BAD_CHARACTERISTICS;
+		if (FilterContext->NBLPool == NULL) {
+			Status = NDIS_STATUS_BAD_CHARACTERISTICS;
 			break;
 		}
 
 
-		NdisMoveMemory(filterContext->MacAddress, attachParameters->CurrentMacAddress, NDIS_MAX_PHYS_ADDRESS_LENGTH);
-		filterContext->MacLength = (BYTE)(attachParameters->MacAddressLength & 0xFF);
+		NdisMoveMemory(FilterContext->MacAddress, AttachParameters->CurrentMacAddress, NDIS_MAX_PHYS_ADDRESS_LENGTH);
+		FilterContext->MacLength = (BYTE)(AttachParameters->MacAddressLength & 0xFF);
+		FilterContext->BasePortLuid = AttachParameters->BaseMiniportNetLuid;
+		FilterContext->BasePortIndex = AttachParameters->BaseMiniportIfIndex;
+		FilterContext->OffloadConfig = AttachParameters->DefaultOffloadConfiguration;
 
-		filterContext->BasePortLuid = attachParameters->BaseMiniportNetLuid;
-
-		NDIS_FILTER_ATTRIBUTES filterAttributes;
-		NdisZeroMemory(&filterAttributes, sizeof(NDIS_FILTER_ATTRIBUTES));
-		filterAttributes.Header.Revision = NDIS_FILTER_ATTRIBUTES_REVISION_1;
-		filterAttributes.Header.Size = sizeof(NDIS_FILTER_ATTRIBUTES);
-		filterAttributes.Header.Type = NDIS_OBJECT_TYPE_FILTER_ATTRIBUTES;
-		filterAttributes.Flags = 0;
+		NDIS_FILTER_ATTRIBUTES FilterAttributes;
+		NdisZeroMemory(&FilterAttributes, sizeof(NDIS_FILTER_ATTRIBUTES));
+		FilterAttributes.Header.Revision = NDIS_FILTER_ATTRIBUTES_REVISION_1;
+		FilterAttributes.Header.Size = sizeof(NDIS_FILTER_ATTRIBUTES);
+		FilterAttributes.Header.Type = NDIS_OBJECT_TYPE_FILTER_ATTRIBUTES;
+		FilterAttributes.Flags = 0;
 
 
 		NDIS_DECLARE_FILTER_MODULE_CONTEXT(FILTER_CONTEXT);
-		status = NdisFSetAttributes(ndisfilterHandle,
-			filterContext,
-			&filterAttributes);
+		Status = NdisFSetAttributes(NdisFilterHandle,
+			FilterContext,
+			&FilterAttributes);
 
-		if (status != NDIS_STATUS_SUCCESS) {
+		if (!NT_SUCCESS(Status)) {
 			break;
 		}
 
-		filterContext->FilterState = FilterPaused;
+		FilterContext->FilterState = FilterPaused;
 
 		NDIS_ACQUIRE_LOCK(&FilterListLock, FALSE);
-		InsertHeadList(&FilterModuleList, &filterContext->FilterModuleLink);
+		InsertHeadList(&FilterModuleList, &FilterContext->FilterModuleLink);
 		NDIS_RELEASE_LOCK(&FilterListLock, FALSE);
 
 	} while (FALSE);
 
-	if (status != NDIS_STATUS_SUCCESS) {
-		if (filterContext != NULL) {
-
-			if (filterContext->NBLPool != NULL) {
-				NdisFreeNetBufferListPool(filterContext->NBLPool);
+	if (!NT_SUCCESS(Status)) {
+		if (FilterContext != NULL) {
+			if (FilterContext->NBLPool != NULL) {
+				NdisFreeNetBufferListPool(FilterContext->NBLPool);
 			}
-			NdisFreeMemory(filterContext, 0, 0);
-			filterContext = NULL;
+			ExFreePoolWithTag(FilterContext, FILTER_CONTEXT_ALLOC_TAG);
+			FilterContext = NULL;
 		}
 	}
-
-	return status;
+	return Status;
 }
 
-NDIS_STATUS WPFilterRestart(NDIS_HANDLE FilterModuleContext, NDIS_FILTER_RESTART_PARAMETERS* RestartParameters) {
+NDIS_STATUS WPFilterRestart(NDIS_HANDLE FilterModuleContext, PNDIS_FILTER_RESTART_PARAMETERS RestartParameters) {
 
-	NDIS_STATUS status = NDIS_STATUS_SUCCESS;
-	FILTER_CONTEXT* filterContext = (FILTER_CONTEXT*)FilterModuleContext;
+	NDIS_STATUS Status = NDIS_STATUS_SUCCESS;
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
 
-
-	NDIS_RESTART_ATTRIBUTES* ndisRestartAttributes = RestartParameters->RestartAttributes;
+	PNDIS_RESTART_ATTRIBUTES NdisRestartAttributes = RestartParameters->RestartAttributes;
 	PNDIS_RESTART_GENERAL_ATTRIBUTES GenAttr = NULL;
 
-	status = NDIS_STATUS_SUCCESS;
+	Status = NDIS_STATUS_SUCCESS;
 
-	while (ndisRestartAttributes) {
-		DbgPrint("%X\n", ndisRestartAttributes->Oid);
-		if (ndisRestartAttributes->Oid == OID_GEN_MINIPORT_RESTART_ATTRIBUTES) {
-			GenAttr = (PNDIS_RESTART_GENERAL_ATTRIBUTES)ndisRestartAttributes->Data;
-			filterContext->MaxFrameSize = GenAttr->MtuSize + sizeof(ETH_HEADER);
-			if (status != NDIS_STATUS_SUCCESS) {
+	while (NdisRestartAttributes) {
+		DbgPrint("%X\n", NdisRestartAttributes->Oid);
+		if (NdisRestartAttributes->Oid == OID_GEN_MINIPORT_RESTART_ATTRIBUTES) {
+			GenAttr = (PNDIS_RESTART_GENERAL_ATTRIBUTES)NdisRestartAttributes->Data;
+			FilterContext->MaxFrameSize = GenAttr->MtuSize + sizeof(ETH_HEADER);
+			if (Status != NDIS_STATUS_SUCCESS) {
 				break;
 			}
 		}
-		ndisRestartAttributes = ndisRestartAttributes->Next;
+		NdisRestartAttributes = NdisRestartAttributes->Next;
 	}
 
 
 	// If everything is OK, set the filter in running state.
-	filterContext->FilterState = FilterRunning; // when successful
+	FilterContext->FilterState = FilterRunning; // when successful
 
 
 	// Ensure the state is Paused if restart failed.
-	if (status != NDIS_STATUS_SUCCESS)
+	if (Status != NDIS_STATUS_SUCCESS)
 	{
-		filterContext->FilterState = FilterPaused;
+		FilterContext->FilterState = FilterPaused;
 	}
 
-	return status;
+	return Status;
 }
 
-NDIS_STATUS WPFilterPause(NDIS_HANDLE FilterModuleContext, NDIS_FILTER_PAUSE_PARAMETERS* pauseParameters) {
+NDIS_STATUS WPFilterPause(NDIS_HANDLE FilterModuleContext, NDIS_FILTER_PAUSE_PARAMETERS* PauseParameters) {
 
-	DbgPrint("WPFilterPause\n");
+	TRACE_ENTER();
 
-	FILTER_CONTEXT* filterContext = (FILTER_CONTEXT*)(FilterModuleContext);
-	NDIS_STATUS status;
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)(FilterModuleContext);
+	NDIS_STATUS Status;
 
 	// Set the flag that the filter is going to pause
-	NDIS_ACQUIRE_LOCK(&filterContext->FilterLock, FALSE);
-	filterContext->FilterState = FilterPausing;
-	NDIS_RELEASE_LOCK(&filterContext->FilterLock, FALSE);
+	NDIS_ACQUIRE_LOCK(&FilterContext->FilterLock, FALSE);
+	FilterContext->FilterState = FilterPausing;
+	Status = NDIS_STATUS_SUCCESS;
+	FilterContext->FilterState = FilterPaused;
+	NDIS_RELEASE_LOCK(&FilterContext->FilterLock, FALSE);
 
-	status = NDIS_STATUS_SUCCESS;
-
-	filterContext->FilterState = FilterPaused;
-
-	return status;
+	TRACE_EXIT();
+	return Status;
 }
 
 VOID WPFilterDetach(NDIS_HANDLE FilterModuleContext) {
 
-	DbgPrint("WPFilterDetach\n");
+	TRACE_ENTER();
 
-	FILTER_CONTEXT* filterContext = (FILTER_CONTEXT*)FilterModuleContext;
+	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
 
 	// Detach must not fail, so do not put any code here that can possibly fail.
-	if (filterContext->NBLPool != NULL) {
-		NdisFreeNetBufferListPool(filterContext->NBLPool);
+	if (FilterContext->NBLPool != NULL) {
+		NdisFreeNetBufferListPool(FilterContext->NBLPool);
 	}
 
 	NDIS_ACQUIRE_LOCK(&FilterListLock, FALSE);
-	RemoveEntryList(&filterContext->FilterModuleLink);
+	RemoveEntryList(&FilterContext->FilterModuleLink);
 	NDIS_RELEASE_LOCK(&FilterListLock, FALSE);
 
 	// Free the memory allocated
-	NdisFreeMemory(filterContext, 0, 0);
-	filterContext = NULL;
+	ExFreePoolWithTag(FilterContext, FILTER_CONTEXT_ALLOC_TAG);
+	FilterContext = NULL;
+
+	TRACE_EXIT();
 	return;
 }
 
@@ -283,6 +281,12 @@ NDIS_STATUS WPFilterSetModuleOptions(NDIS_HANDLE FilterModuleContext) {
 	ChainHead = SingleNBLNode;										\
 }
 
+#define RemoveSingleNBLFromNBLChainHead(ChainHead) {		\
+	if(ChainHead != NULL){									\
+		ChainHead = NET_BUFFER_LIST_NEXT_NBL(ChainHead);	\
+	}														\
+}
+
 #define DropPacket(CanNotPend,NBLDropListHeader,SingleNBLPendingDrop,DropCounter,DroppedFlag) {	\
 	if(!DroppedFlag){																			\
 		if (!CanNotPend) {																		\
@@ -300,8 +304,15 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 
 	PNET_BUFFER_LIST AcceptListHead = NULL;
 	PNET_BUFFER_LIST AcceptListTail = NULL;
+	PNET_BUFFER_LIST CurrentNBL = NetBufferLists;
+	PNET_BUFFER_LIST NextNBL = NULL;
+	PNET_BUFFER_LIST CompleteNBL = NULL;
 
-	for (NET_BUFFER_LIST* CurrentNBL = NetBufferLists; CurrentNBL != NULL; CurrentNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL)) {
+	while (CurrentNBL != NULL) {
+
+		NextNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
+		LinkSingleNBLIntoNBLChainHead(CompleteNBL, CurrentNBL);
+
 		for (NET_BUFFER* CurrentNB = NET_BUFFER_LIST_FIRST_NB(CurrentNBL); CurrentNB != NULL; CurrentNB = NET_BUFFER_NEXT_NB(CurrentNB)) {
 
 			BOOLEAN FreeFlag = TRUE;
@@ -316,7 +327,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 
 			if (DataLength == 0) {
 				continue;
-			} 
+			}
 			PacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, PacketBufferLength, NET_PACKET_ALLOC_TAG);
 			if (PacketBuffer == NULL) {
 				continue;
@@ -359,8 +370,17 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 					break;
 				}
 
+				if ((OutputFilterResult.Modified == FALSE) && (PostroutingFilterResult.Modified == FALSE) && (NET_BUFFER_LIST_FIRST_NB(CurrentNBL)->Next == NULL)) {
+
+					RemoveSingleNBLFromNBLChainHead(CompleteNBL);
+					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
+					LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, CurrentNBL);
+
+					break;
+				}
+
 				PostroutingMDL = NdisAllocateMdl(FilterContext->FilterHandle, PacketBuffer, PacketBufferLength);
-				if (PostroutingMDL == NULL) {					
+				if (PostroutingMDL == NULL) {
 					break;
 				}
 				PostroutingNBL = NdisAllocateNetBufferAndNetBufferList(FilterContext->NBLPool, 0, 0, PostroutingMDL, 0, DataLength);
@@ -373,14 +393,16 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 				PostroutingNBL->SourceHandle = FilterContext->FilterHandle;
 				NdisCopySendNetBufferListInfo(PostroutingNBL, CurrentNBL);
 
-				/*
-				NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
-				ChecksumOffloadInfo.Value = 0;
-				ChecksumOffloadInfo.Receive.IpChecksumSucceeded = PassModifiedRxPacketWithBadIPChecksum;
-				ChecksumOffloadInfo.Receive.TcpChecksumSucceeded = PassModifiedRxPacketWithBadTCPChecksum;
-				ChecksumOffloadInfo.Receive.UdpChecksumSucceeded = PassModifiedRxPacketWithBadUDPChecksum;
-				PostroutingNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
-				*/
+				if (OutputFilterResult.Modified || PostroutingFilterResult.Modified) {
+					NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
+					ChecksumOffloadInfo.Value = 0;
+					ChecksumOffloadInfo.Transmit.IpHeaderChecksum = TryCalcModifiedTxPacketIPChecksumByNIC;
+					ChecksumOffloadInfo.Transmit.TcpChecksum = TryCalcModifiedTxPacketTCPChecksumByNIC;
+					ChecksumOffloadInfo.Transmit.UdpChecksum = TryCalcModifiedTxPacketUDPChecksumByNIC;
+					PostroutingNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
+
+				}
+
 
 				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, PostroutingNBL);
 				FreeFlag = FALSE;
@@ -391,9 +413,12 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 			}
 
 		}
+		CurrentNBL = NextNBL;
 	}
 
-	NdisFSendNetBufferListsComplete(FilterContext->FilterHandle, NetBufferLists, SendFlags);
+	if (CompleteNBL != NULL) {
+		NdisFSendNetBufferListsComplete(FilterContext->FilterHandle, CompleteNBL, SendFlags);
+	}
 	if (AcceptListHead != NULL) {
 		NdisFSendNetBufferLists(FilterContext->FilterHandle, AcceptListHead, PortNumber, SendFlags);
 	}
@@ -419,7 +444,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 	PacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, PacketBufferLength, NET_PACKET_ALLOC_TAG);
 	if (PacketBuffer == NULL) {
 		//Error occurr. Return the NBL
-		
+
 		if (!CanNotPend) {
 			NdisFReturnNetBufferLists(FilterContext->FilterHandle, NetBufferLists, ReceiveFlags);
 		}
@@ -436,7 +461,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 		// In other words, if the first NB should be dropped, drop the whole NBL.
 		PNET_BUFFER CurrentNB = NET_BUFFER_LIST_FIRST_NB(CurrentNBL);
 
-		PNET_BUFFER_LIST TempNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
+		PNET_BUFFER_LIST NextNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
 		BYTE* EthDataPtr;
 
 		HOOK_RESULT PreroutingFilterResult;
@@ -452,12 +477,12 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 		BYTE* IpHeader = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
 		BYTE* DestIpAddressBytes;
 		USHORT EtherProtocol;
+		BYTE ForwardingFlag = FALSE;
 
 		do {
 			if (DataLength == 0 || DataLength > PacketBufferLength) {
 				// It must not occurr. Return the NBL.
-				TRACE_DBG("a\n");
-				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt,Dropped);
+				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 				break;
 			}
 
@@ -472,17 +497,16 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 			/*========== THE PRE_ROUTING FILTER POINT ==========*/
 			PreroutingFilterResult = FilterEthernetPacket(
-						PacketBuffer, 
-						&DataLength, 
-						PacketBufferLength,
-						FILTER_POINT_PREROUTING,
-						FilterContext->BasePortLuid,
-						DispatchLevel
-					);
-			
+				PacketBuffer,
+				&DataLength,
+				PacketBufferLength,
+				FILTER_POINT_PREROUTING,
+				FilterContext->BasePortLuid,
+				DispatchLevel
+			);
+
 			if (!PreroutingFilterResult.Accept) {
 				// Drop this packet
-				TRACE_DBG("b\n");
 				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 
 				// If not modified, go next packet, otherwise continue process this one
@@ -492,11 +516,10 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			}
 			/*========== END PRE_ROUTING FILTER POINT ==========*/
 
-			
+
 			//PIPV6_HEADER Ipv6Header = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
 			EtherProtocol = ETH_HEADER_PROTOCOL(EtherHeader);
-			if (AllowIPForwarding && (EtherProtocol  == ETH_PROTOCOL_IP || EtherProtocol == ETH_PROTOCOL_IPV6)) {
-
+			if (EtherProtocol == ETH_PROTOCOL_IP || EtherProtocol == ETH_PROTOCOL_IPV6) {
 
 				if (EtherProtocol == ETH_PROTOCOL_IP) {
 					// IPv4
@@ -507,16 +530,22 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					DestIpAddressBytes = ((PIPV6_HEADER)IpHeader)->DestAddress.AddressBytes;
 				}
 
-				if (IsValidForwardAddress(ETH_HEADER_PROTOCOL(EtherHeader),FilterContext->BasePortLuid, DestIpAddressBytes)) {
-			
-					//ForwardPacket(ETH_HEADER_PROTOCOL(EtherHeader), DestIpAddressBytes, PacketBuffer, DataLength);
-
-					TRACE_DBG("c\n");
-					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
-					break;
-				}
+				ForwardingFlag = IsValidForwardAddress(ETH_HEADER_PROTOCOL(EtherHeader), FilterContext->BasePortIndex, DestIpAddressBytes);
 			}
 
+			if (ForwardingFlag == 0xFF) {
+				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+				break;
+			}
+
+			if (ForwardingFlag == TRUE) {
+				//The IP packet is not for local machine
+				if (AllowIPForwarding) {
+					//ForwardPacket(ETH_HEADER_PROTOCOL(EtherHeader), DestIpAddressBytes, PacketBuffer, DataLength);
+				}
+				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+				break;
+			}
 
 			/*========== THE INPUT FILTER POINT ==========*/
 			InputFilterResult = FilterEthernetPacket(
@@ -530,7 +559,6 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 			if (!InputFilterResult.Accept) {
 				// Drop this packet
-				TRACE_DBG("d\n");
 				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 
 				// If not modified, go next packet, otherwise continue process this one
@@ -549,7 +577,6 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				IndicatePacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, DataLength, NET_PACKET_ALLOC_TAG);
 				if (IndicatePacketBuffer == NULL) {
 					// Error occurred! Drop this packet
-					TRACE_DBG("e\n");
 					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 					break;
 				}
@@ -558,7 +585,6 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				if (IndicatePacketBufferMDL == NULL) {
 					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
 					// Error occurred! Drop this packet
-					TRACE_DBG("f\n");
 					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 					break;
 				}
@@ -570,7 +596,6 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					// Error occurred! Drop this packet
 					NdisFreeMdl(IndicatePacketBufferMDL);
 					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
-					TRACE_DBG("g\n");
 					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
 					break;
 				}
@@ -579,9 +604,9 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				IndicateNBL->SourceHandle = FilterContext->FilterHandle;
 				NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
 				ChecksumOffloadInfo.Value = 0;
-				ChecksumOffloadInfo.Receive.IpChecksumSucceeded = PassModifiedRxPacketWithBadIPChecksum;
-				ChecksumOffloadInfo.Receive.TcpChecksumSucceeded = PassModifiedRxPacketWithBadTCPChecksum;
-				ChecksumOffloadInfo.Receive.UdpChecksumSucceeded = PassModifiedRxPacketWithBadUDPChecksum;
+				ChecksumOffloadInfo.Receive.IpChecksumSucceeded = IndicateModifiedRxPacketWithBadIPChecksumAsGood;
+				ChecksumOffloadInfo.Receive.TcpChecksumSucceeded = IndicateModifiedRxPacketWithBadTCPChecksumAsGood;
+				ChecksumOffloadInfo.Receive.UdpChecksumSucceeded = IndicateModifiedRxPacketWithBadUDPChecksumAsGood;
 				IndicateNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
 
 			}
@@ -604,7 +629,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			// IndicateNBL was not been created by us.
 			if (IndicateNBL->SourceHandle != FilterContext->FilterHandle) {
 				// Then immediately relink the NBL back into the chain.
-				NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = TempNBL;
+				NET_BUFFER_LIST_NEXT_NBL(IndicateNBL) = NextNBL;
 				break;
 			}
 
@@ -613,7 +638,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 		} while (FALSE);
 
-		CurrentNBL = TempNBL;
+		CurrentNBL = NextNBL;
 	}
 
 	ExFreePoolWithTag(PacketBuffer, NET_PACKET_ALLOC_TAG);
