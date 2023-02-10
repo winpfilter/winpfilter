@@ -1,11 +1,13 @@
 #include "global_variables.h"
+
 NDIS_HANDLE FilterDriverHandle = NULL;
 NDIS_HANDLE FilterDriverObject = NULL;
 
 NDIS_SPIN_LOCK FilterListLock;
 LIST_ENTRY FilterModuleList;
 
-DEVICE_OBJECT* WPFilterCommunicationDevice;
+PDEVICE_OBJECT WPFilterR0HookCommunicationDevice;
+PDEVICE_OBJECT WPFilterR3CommandCommunicationDevice;
 
 BOOLEAN IndicateModifiedRxPacketWithBadIPChecksumAsGood = TRUE;
 BOOLEAN IndicateModifiedRxPacketWithBadTCPChecksumAsGood = TRUE;

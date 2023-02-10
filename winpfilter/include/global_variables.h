@@ -8,7 +8,8 @@ extern NDIS_HANDLE FilterDriverObject;
 extern NDIS_SPIN_LOCK FilterListLock;
 extern LIST_ENTRY FilterModuleList;
 
-extern DEVICE_OBJECT* WPFilterCommunicationDevice;
+extern PDEVICE_OBJECT WPFilterR0HookCommunicationDevice;
+extern PDEVICE_OBJECT WPFilterR3CommandCommunicationDevice;
 
 extern BOOLEAN IndicateModifiedRxPacketWithBadIPChecksumAsGood;
 extern BOOLEAN IndicateModifiedRxPacketWithBadTCPChecksumAsGood;

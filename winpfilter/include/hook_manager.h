@@ -12,12 +12,12 @@ typedef ULONG FILTER_PONIT;
 #define FILTER_POINT_OUTPUT		 3
 #define FILTER_POINT_POSTROUTING 4
 
-typedef ULONG HOOK_ACTION;
+typedef  ULONG HOOK_ACTION;
 
 //ULONG HOOKFUNCTION(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
 //At most time BufferLength = MTU
 //The hook function can modify the hook_data but make sure DataLength <= BufferLength
-typedef HOOK_ACTION(*HOOK_FUNCTION)(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
+typedef  HOOK_ACTION(__fastcall *HOOK_FUNCTION)(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
 
 // HOOK_ACTION values
 // Drop the packet 

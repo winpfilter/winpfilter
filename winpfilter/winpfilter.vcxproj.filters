@@ -54,6 +54,9 @@
     <ClCompile Include="interface_ip_table.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="communication.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\net\ether.h">
@@ -99,6 +102,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\interface_ip_table.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\communication.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

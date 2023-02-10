@@ -20,8 +20,10 @@
 #define FILTER_GUID  L"{60857398-d67c-4a8d-8b2e-b2bc9ad03bb8}"
 #define FILTER_FRIENDLY_NAME  L"winpfilter NDIS Driver"
 
-#define WINPFILTER_COMMUNICATION_DEVICE_NAME L"\\Device\\WinpfilterCommunicationDevice"
-#define WINPFILTER_COMMUNICATION_DEVICE_LINK L"\\??\\winpfilter_com_device"
+#define WINPFILTER_R0HOOK_COMMUNICATION_DEVICE_NAME L"\\Device\\WinpfilterR0HookCommunicationDevice"
+#define WINPFILTER_R0HOOK_COMMUNICATION_DEVICE_LINK L"\\??\\winpfilter_r0hook_com_device"
+#define WINPFILTER_R3COMMAND_COMMUNICATION_DEVICE_NAME L"\\Device\\WinpfilterR3CommandCommunicationDevice"
+#define WINPFILTER_R3COMMAND_COMMUNICATION_DEVICE_LINK L"\\??\\winpfilter_r3cmd_com_device"
 
 #define FILTER_CONTEXT_ALLOC_TAG 'TACF'
 #define NET_BUFFER_LIST_POOL_ALLOC_TAG 'PLBN'

@@ -4,7 +4,6 @@
  * Author:			HBSnail
  */
 
-#include "winpfilter.h"
 #include "filter_subroutines.h"
 #include "hook_manager.h"
 #include "route.h"
@@ -352,9 +351,29 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 				);
 				/*========== END OUTPUT FILTER POINT ==========*/
 
-				if ((!OutputFilterResult.Accept) && (!OutputFilterResult.Modified)) {
+				if (OutputFilterResult.Modified) {
+					// Modified = TRUE 
+					// Accept = FALSE
+					// 
+					// TODO
+					// Join the postrouting queue
+
+					// return the packet here
+					FreeFlag = FALSE;
 					break;
 				}
+
+				if (!OutputFilterResult.Accept) {
+					// Modified = FALSE 
+					// Accept = FALSE
+					// Do NOT send this. return the packet
+					break;
+				}
+				// else
+				// Modified = FALSE 
+				// Accept = TRUE
+				// Do postrouting here
+
 
 				/*========== THE POSTROUTING FILTER POINT ==========*/
 				PostroutingFilterResult = FilterEthernetPacket(
@@ -370,7 +389,8 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 					break;
 				}
 
-				if ((OutputFilterResult.Modified == FALSE) && (PostroutingFilterResult.Modified == FALSE) && (NET_BUFFER_LIST_FIRST_NB(CurrentNBL)->Next == NULL)) {
+				if ((!PostroutingFilterResult.Modified) && (NET_BUFFER_LIST_FIRST_NB(CurrentNBL)->Next == NULL)) {
+					// Not modified and only one NB in this NBL
 
 					RemoveSingleNBLFromNBLChainHead(CompleteNBL);
 					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
@@ -530,7 +550,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					DestIpAddressBytes = ((PIPV6_HEADER)IpHeader)->DestAddress.AddressBytes;
 				}
 
-				ForwardingFlag = IsValidForwardAddress(ETH_HEADER_PROTOCOL(EtherHeader), FilterContext->BasePortIndex, DestIpAddressBytes);
+				ForwardingFlag = IsValidForwardAddress(EtherProtocol, FilterContext->BasePortIndex, DestIpAddressBytes);
 			}
 
 			if (ForwardingFlag == 0xFF) {
