@@ -59,7 +59,7 @@ VOID FreeFilterHookManager() {
 }
 
 
-NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint) {
+NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT FilterPoint) {
 
 	PHOOK_ENTRY Entry;
 	PLIST_ENTRY InsertPos;
@@ -102,10 +102,11 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT F
 	return STATUS_SUCCESS;
 }
 
-VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint) {
+BOOLEAN UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT FilterPoint) {
 
 	PHOOK_ENTRY CurrentEntry;
 	LOCK_STATE_EX LockState;
+	BOOLEAN UnregisterFlag = FALSE;
 
 	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, 0);
 
@@ -117,16 +118,17 @@ VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT Fil
 		if ((Priority == CurrentEntry->Priority)
 			&& (HookFunction == CurrentEntry->HookFunction)) {
 			RemoveEntryList(RemovePos);
+			UnregisterFlag = TRUE;
 			ExFreePoolWithTag(CurrentEntry, HOOK_ENTRY_ALLOC_TAG);
 			break;
 		}
 	}
 
 	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
-
+	return UnregisterFlag;
 }
 
-VOID UnregisterAllHooks(FILTER_PONIT FilterPoint) {
+VOID UnregisterAllHooks(FILTER_POINT FilterPoint) {
 
 	PLIST_ENTRY TempPos;
 	PHOOK_ENTRY CurrentEntry;
@@ -150,7 +152,7 @@ VOID UnregisterAllHooks(FILTER_PONIT FilterPoint) {
 
 }
 
-HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG BufferLength, FILTER_PONIT FilterPoint, NET_LUID InterfaceLuid,UCHAR DispatchLevel) {
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG BufferLength, FILTER_POINT FilterPoint, NET_LUID InterfaceLuid,UCHAR DispatchLevel) {
 
 	LOCK_STATE_EX LockState;
 	HOOK_RESULT Result;

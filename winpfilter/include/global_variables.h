@@ -11,11 +11,14 @@ extern LIST_ENTRY FilterModuleList;
 extern PDEVICE_OBJECT WPFilterR0HookCommunicationDevice;
 extern PDEVICE_OBJECT WPFilterR3CommandCommunicationDevice;
 
-extern BOOLEAN IndicateModifiedRxPacketWithBadIPChecksumAsGood;
-extern BOOLEAN IndicateModifiedRxPacketWithBadTCPChecksumAsGood;
-extern BOOLEAN IndicateModifiedRxPacketWithBadUDPChecksumAsGood;
-extern BOOLEAN TryCalcModifiedTxPacketIPChecksumByNIC;
-extern BOOLEAN TryCalcModifiedTxPacketTCPChecksumByNIC;
-extern BOOLEAN TryCalcModifiedTxPacketUDPChecksumByNIC;
+extern BYTE IndicateModifiedRxPacketWithBadIPChecksumAsGood;
+extern BYTE IndicateModifiedRxPacketWithBadTCPChecksumAsGood;
+extern BYTE IndicateModifiedRxPacketWithBadUDPChecksumAsGood;
+extern BYTE TryCalcModifiedTxPacketIPChecksumByNIC;
+extern BYTE TryCalcModifiedTxPacketTCPChecksumByNIC;
+extern BYTE TryCalcModifiedTxPacketUDPChecksumByNIC;
 
-extern BOOLEAN AllowIPForwarding;
+#define IP_FORWARDING_MODE_SYSTEM		0
+#define IP_FORWARDING_MODE_WINPFILTER	1
+#define IP_FORWARDING_MODE_DISABLE		2
+extern BYTE IPForwardingMode;

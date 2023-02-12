@@ -9,12 +9,12 @@ LIST_ENTRY FilterModuleList;
 PDEVICE_OBJECT WPFilterR0HookCommunicationDevice;
 PDEVICE_OBJECT WPFilterR3CommandCommunicationDevice;
 
-BOOLEAN IndicateModifiedRxPacketWithBadIPChecksumAsGood = TRUE;
-BOOLEAN IndicateModifiedRxPacketWithBadTCPChecksumAsGood = TRUE;
-BOOLEAN IndicateModifiedRxPacketWithBadUDPChecksumAsGood = TRUE;
+BYTE IndicateModifiedRxPacketWithBadIPChecksumAsGood = TRUE;
+BYTE IndicateModifiedRxPacketWithBadTCPChecksumAsGood = TRUE;
+BYTE IndicateModifiedRxPacketWithBadUDPChecksumAsGood = TRUE;
 
-BOOLEAN TryCalcModifiedTxPacketIPChecksumByNIC = TRUE;
-BOOLEAN TryCalcModifiedTxPacketTCPChecksumByNIC = TRUE;
-BOOLEAN TryCalcModifiedTxPacketUDPChecksumByNIC = TRUE;
+BYTE TryCalcModifiedTxPacketIPChecksumByNIC = TRUE;
+BYTE TryCalcModifiedTxPacketTCPChecksumByNIC = TRUE;
+BYTE TryCalcModifiedTxPacketUDPChecksumByNIC = TRUE;
 
-BOOLEAN AllowIPForwarding = FALSE;
+BYTE IPForwardingMode = IP_FORWARDING_MODE_SYSTEM;

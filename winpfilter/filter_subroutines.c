@@ -536,37 +536,34 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			}
 			/*========== END PRE_ROUTING FILTER POINT ==========*/
 
+			if (IPForwardingMode != IP_FORWARDING_MODE_SYSTEM) {
+				//PIPV6_HEADER Ipv6Header = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
+				EtherProtocol = ETH_HEADER_PROTOCOL(EtherHeader);
+				if (EtherProtocol == ETH_PROTOCOL_IP || EtherProtocol == ETH_PROTOCOL_IPV6) {
 
-			//PIPV6_HEADER Ipv6Header = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
-			EtherProtocol = ETH_HEADER_PROTOCOL(EtherHeader);
-			if (EtherProtocol == ETH_PROTOCOL_IP || EtherProtocol == ETH_PROTOCOL_IPV6) {
+					if (EtherProtocol == ETH_PROTOCOL_IP) {
+						// IPv4
+						DestIpAddressBytes = ((PIPV4_HEADER)IpHeader)->DestAddress.AddressBytes;
+					}
+					else {
+						// IPv6
+						DestIpAddressBytes = ((PIPV6_HEADER)IpHeader)->DestAddress.AddressBytes;
+					}
 
-				if (EtherProtocol == ETH_PROTOCOL_IP) {
-					// IPv4
-					DestIpAddressBytes = ((PIPV4_HEADER)IpHeader)->DestAddress.AddressBytes;
+					ForwardingFlag = IsValidForwardAddress(EtherProtocol, FilterContext->BasePortIndex, DestIpAddressBytes);
 				}
-				else {
-					// IPv6
-					DestIpAddressBytes = ((PIPV6_HEADER)IpHeader)->DestAddress.AddressBytes;
+
+
+				if (ForwardingFlag == TRUE) {
+					//The IP packet is not for local machine
+					if (IPForwardingMode == IP_FORWARDING_MODE_WINPFILTER) {
+						//ForwardPacket(ETH_HEADER_PROTOCOL(EtherHeader), DestIpAddressBytes, PacketBuffer, DataLength);
+					}
+					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					break;
 				}
-
-				ForwardingFlag = IsValidForwardAddress(EtherProtocol, FilterContext->BasePortIndex, DestIpAddressBytes);
 			}
-
-			if (ForwardingFlag == 0xFF) {
-				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
-				break;
-			}
-
-			if (ForwardingFlag == TRUE) {
-				//The IP packet is not for local machine
-				if (AllowIPForwarding) {
-					//ForwardPacket(ETH_HEADER_PROTOCOL(EtherHeader), DestIpAddressBytes, PacketBuffer, DataLength);
-				}
-				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
-				break;
-			}
-
+			
 			/*========== THE INPUT FILTER POINT ==========*/
 			InputFilterResult = FilterEthernetPacket(
 				PacketBuffer,

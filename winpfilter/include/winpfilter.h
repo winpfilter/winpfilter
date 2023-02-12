@@ -10,6 +10,7 @@
 #include <netioapi.h>
 #include <ndis.h>
 
+#define WINPFILTER_VERSION 20230212
 
 #define NDIS_MAJOR_VERSION 6
 #define NDIS_MINOR_VERSION 20

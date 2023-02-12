@@ -183,6 +183,9 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		}
 
 		//Set the IRP dispatch subroutines for driver
+		DriverObject->MajorFunction[IRP_MJ_CREATE] = WPFilterCommDeviceCreate;
+		DriverObject->MajorFunction[IRP_MJ_CLOSE] = WPFilterCommDeviceClose;
+		DriverObject->MajorFunction[IRP_MJ_CLEANUP] = WPFilterCommDeviceClean;
 		DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = WPFilterCommDeviceIOCtl;
 		DriverObject->MajorFunction[IRP_MJ_READ] = WPFilterCommDeviceRead;
 		DriverObject->MajorFunction[IRP_MJ_WRITE] = WPFilterCommDeviceWrite;

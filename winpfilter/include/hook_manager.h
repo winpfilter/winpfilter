@@ -4,7 +4,7 @@
 #define HOOK_LIST_COUNT 5
 
 
-typedef ULONG FILTER_PONIT;
+typedef ULONG FILTER_POINT;
 
 #define FILTER_POINT_PREROUTING	 0
 #define FILTER_POINT_INPUT		 1
@@ -17,7 +17,7 @@ typedef  ULONG HOOK_ACTION;
 //ULONG HOOKFUNCTION(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
 //At most time BufferLength = MTU
 //The hook function can modify the hook_data but make sure DataLength <= BufferLength
-typedef  HOOK_ACTION(__fastcall *HOOK_FUNCTION)(NET_LUID InterfaceLuid, FILTER_PONIT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
+typedef  HOOK_ACTION(__fastcall *HOOK_FUNCTION)(NET_LUID InterfaceLuid, FILTER_POINT FilterPoint, ULONG BufferLength, BYTE* Buffer, ULONG* pDataLength);
 
 // HOOK_ACTION values
 // Drop the packet 
@@ -44,15 +44,15 @@ typedef struct _HOOK_ENTRY {
 	LIST_ENTRY		HookLink;
 	ULONG			Priority;
 	HOOK_FUNCTION	HookFunction;
-	ULONG	FilterPoint;
+	ULONG			FilterPoint;
 }HOOK_ENTRY, * PHOOK_ENTRY;
 
 NTSTATUS InitializeFilterHookManager(NDIS_HANDLE Handle);
-NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint);
-VOID UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_PONIT FilterPoint);
-VOID UnregisterAllHooks(FILTER_PONIT FilterPoint);
+NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT FilterPoint);
+BOOLEAN UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT FilterPoint);
+VOID UnregisterAllHooks(FILTER_POINT FilterPoint);
 VOID FreeFilterHookManager();
-HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength, ULONG BufferLength, FILTER_PONIT FilterPoint, NET_LUID InterfaceIndex, UCHAR DispatchLevel);
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength, ULONG BufferLength, FILTER_POINT FilterPoint, NET_LUID InterfaceIndex, UCHAR DispatchLevel);
 
 #ifdef DBG
 VOID PrintHookTable();
