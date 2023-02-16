@@ -32,3 +32,4 @@ DisplayProgramVersion(BOOLEAN Title);
 
 VOID DisplayAllItems();
 
+VOID DisplayHooks(PCHAR ValueString);

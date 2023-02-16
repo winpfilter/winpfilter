@@ -9,8 +9,9 @@
 #include <wdmsec.h>
 #include <netioapi.h>
 #include <ndis.h>
+#include <limits.h>
 
-#define WINPFILTER_VERSION 20230212
+#define WINPFILTER_VERSION 20230215
 
 #define NDIS_MAJOR_VERSION 6
 #define NDIS_MINOR_VERSION 20

@@ -98,3 +98,43 @@ VOID DisplayAllItems() {
 		DisplaySingleItem(i, NonCount, TRUE);
 	}
 }
+
+VOID DisplayHooks(PCHAR ValueString) {
+#define DisplayHookMaxCount 255
+	BOOLEAN SuccessFlag = FALSE;
+	ULONG Value = ULONG_MAX;
+	for (ULONG i = 0; i < FilterPointCount; i++) {
+		if (!_stricmp(ValueString, FilterPointText[i])) {
+			Value = i;
+			break;
+		}
+	}
+	if (Value == ULONG_MAX && sscanf_s(ValueString, "%u", &Value) == 0) {
+		SetConsoleError();
+		printf("[ERROR] Failed to convert '%s' to integer.\n", ValueString);
+		SetConsoleDefault();
+		return;
+	}
+	ULONG Data[2 + (DisplayHookMaxCount * sizeof(HOOK_INFO)) / sizeof(ULONG)] = { 0, Value };
+	ULONG ReturnLength = 0;
+	SuccessFlag = DeviceIoControl(WinPFilterDevice, WINPFILTER_CTL_CODE_HOOK_INFO, Data, sizeof(Data), Data, sizeof(Data), &ReturnLength, NULL);
+	if (!SuccessFlag || Data[0] != 0x808) {
+		SetConsoleError();
+		printf("[ERROR] Failed to get hooks.\n");
+		SetConsoleDefault();
+		return;
+	}
+	ULONG TotalCount = Data[1];
+	if (TotalCount == ULONG_MAX) {
+		SetConsoleError();
+		printf("[ERROR] The operation was rejected by winpfilter.\n");
+		SetConsoleDefault();
+		return;
+	}
+	ULONG PrintCount = TotalCount > DisplayHookMaxCount ? DisplayHookMaxCount : TotalCount;
+	PHOOK_INFO HookList = (PHOOK_INFO)(Data + 2);
+	printf("Total number of hooks in filter point %s: %d\nTop %d hooks:\n\tHookFunctionAddress\tPriority\n", FilterPointText[Value], TotalCount, DisplayHookMaxCount);
+	for (ULONG i = 0; i < PrintCount; i++) {
+		printf("\t0x%p\t%d\n", HookList[i].HookFunction, HookList[i].Priority);
+	}
+}

@@ -21,14 +21,35 @@ VOID PrintHookList(PLIST_ENTRY Head) {
 }
 
 VOID PrintHookTable() {
+	LOCK_STATE_EX LockState;
 	for (ULONG i = 0; i < HOOK_LIST_COUNT; i++) {
 		TRACE_DBG("HOOK LIST ID: %d\n", i);
+		NdisAcquireRWLockRead(HookListsLock[i], &LockState, FALSE);
 		PrintHookList(&HookLists[i]);
+		NdisReleaseRWLock(HookListsLock[i], &LockState);
 	}
 }
 
 #endif
 
+ULONG GetHookInformation(FILTER_POINT FilterPoint,PHOOK_INFO Buffer,ULONG Length) {
+	LOCK_STATE_EX LockState;
+	PLIST_ENTRY Head = &HookLists[FilterPoint];
+	PHOOK_ENTRY CurrentEntry;
+	ULONG Count = 0;
+	ULONG MaxCount = Length / (sizeof(HOOK_INFO));
+	NdisAcquireRWLockRead(HookListsLock[FilterPoint], &LockState, FALSE);
+	for (PLIST_ENTRY i = Head->Flink; i != Head; i = i->Flink) {
+		CurrentEntry = CONTAINING_RECORD(i, HOOK_ENTRY, HookLink);
+		if (Count < MaxCount) {
+			Buffer[Count].Priority = CurrentEntry->Priority;
+			Buffer[Count].HookFunction = CurrentEntry->HookFunction;
+		}
+		Count++;
+	}
+	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
+	return Count;
+}
 
 NTSTATUS InitializeFilterHookManager(NDIS_HANDLE Handle) {
 	TRACE_ENTER();
@@ -75,7 +96,7 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT F
 	Entry->HookFunction = HookFunction;
 	Entry->Priority = Priority;
 
-	NdisAcquireRWLockWrite(HookListsLock[FilterPoint],&LockState,0);
+	NdisAcquireRWLockWrite(HookListsLock[FilterPoint],&LockState,FALSE);
 
 	InsertPos = HookLists[FilterPoint].Flink;
 	for (; 
@@ -108,7 +129,7 @@ BOOLEAN UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT 
 	LOCK_STATE_EX LockState;
 	BOOLEAN UnregisterFlag = FALSE;
 
-	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, 0);
+	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, FALSE);
 
 	for (PLIST_ENTRY RemovePos = HookLists[FilterPoint].Flink; 
 		RemovePos != &HookLists[FilterPoint];
@@ -134,7 +155,7 @@ VOID UnregisterAllHooks(FILTER_POINT FilterPoint) {
 	PHOOK_ENTRY CurrentEntry;
 	LOCK_STATE_EX LockState;
 
-	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, 0);
+	NdisAcquireRWLockWrite(HookListsLock[FilterPoint], &LockState, FALSE);
 
 	for (PLIST_ENTRY RemovePos = HookLists[FilterPoint].Flink;
 		RemovePos != &HookLists[FilterPoint];
@@ -172,7 +193,7 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG B
 		) {
 
 		CurrentEntry = CONTAINING_RECORD(Hook, HOOK_ENTRY, HookLink);
-		Action = (*CurrentEntry->HookFunction)(InterfaceLuid, FilterPoint, BufferLength, EthernetBuffer, DataLength);
+		Action = (*CurrentEntry->HookFunction)(InterfaceLuid, FilterPoint, EthernetBuffer, BufferLength, DataLength);
 		switch (Action)
 		{
 		case HOOK_ACTION_ACCEPT:

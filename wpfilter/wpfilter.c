@@ -6,7 +6,8 @@ enum Command
 {
 	CMD_NULL,
 	CMD_SHOW,
-	CMD_SET
+	CMD_SET,
+	CMD_HOOKS
 };
 
 
@@ -28,7 +29,7 @@ VOID SetSingleItem(ULONG Index, ULONG NonCount, PCHAR ValueString) {
 	ULONG Value;
 	if (sscanf_s(ValueString, "%u", &Value) == 0) {
 		SetConsoleError();
-		printf("[ERROR] Failed to convert 'ValueString' to integer.\n");
+		printf("[ERROR] Failed to convert '%s' to integer.\n", ValueString);
 		SetConsoleDefault();
 		return;
 	}
@@ -86,6 +87,16 @@ int main(int argc,PCHAR argv[])
 					Command = CMD_SET;
 					Item = argv[++i];
 					Value = argv[++i];
+				}
+				continue;
+			}			
+			if (!_stricmp(argv[i], "-showhooks") || !_stricmp(argv[i], "-lh") || !_stricmp(argv[i], "/showhooks") || !_stricmp(argv[i], "/lh")) {
+				if (Command == CMD_NULL) {
+					if (i + 1 >= argc) {
+						break;
+					}
+					Item = argv[++i];
+					Command = CMD_HOOKS;
 				}
 				continue;
 			}
@@ -180,6 +191,12 @@ int main(int argc,PCHAR argv[])
 					break;
 				}
 			}
+			break;
+		case CMD_HOOKS:
+			if (Item == NULL) {
+				break;
+			}
+			DisplayHooks(Item);
 			break;
 		default:
 			break;

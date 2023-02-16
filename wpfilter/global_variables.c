@@ -4,6 +4,14 @@ HANDLE WinPFilterDevice = NULL;
 HANDLE ConsoleHandle = NULL;
 BOOLEAN WarningFlag = TRUE;
 
+PCHAR FilterPointText[] = {
+	"PREROUTING",
+	"INPUT",
+	"FORWARDING",
+	"OUTPUT",
+	"POSTROUTING"
+};
+
 PCHAR CTLCodeTextShort[] = { 
 	"dv",
 	"fm",
@@ -44,3 +52,5 @@ ULONG CTLCodeDisplayType[] = {
 };
 
 const ULONG CTLCodeCount = (ULONG)(sizeof(CTLCodeText) / (sizeof(PVOID)));
+const ULONG FilterPointCount = (ULONG)(sizeof(FilterPointText) / (sizeof(PVOID)));
+

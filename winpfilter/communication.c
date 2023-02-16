@@ -44,7 +44,7 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 				Status = STATUS_UNSUCCESSFUL;
 				break;
 			}
-			if (*FilterPoint > 4 || *ModeOrStatus != 0) {
+			if (*FilterPoint >= HOOK_LIST_COUNT || *ModeOrStatus != 0) {
 				Status = STATUS_UNSUCCESSFUL; 
 				break;
 			}
@@ -161,6 +161,16 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 					TryCalcModifiedTxPacketUDPChecksumByNIC = (BYTE)*Value;
 				}
 				*Value = TryCalcModifiedTxPacketUDPChecksumByNIC;
+				break;
+			case WINPFILTER_CTL_CODE_HOOK_INFO:
+				// Get only: Hook info
+				if (*Value < HOOK_LIST_COUNT) {
+					*Value = GetHookInformation(*Value, KernelBuffer+ NeedBufferLength, OutputBufferLeng- NeedBufferLength);
+					Irp->IoStatus.Information = OutputBufferLeng;
+				}
+				else {
+					*Value = ULONG_MAX;
+				}
 				break;
 			default:
 				Status = STATUS_UNSUCCESSFUL;
