@@ -108,7 +108,7 @@ NDIS_STATUS WPFilterAttach(NDIS_HANDLE NdisFilterHandle, NDIS_HANDLE FilterDrive
 		FilterContext->FilterHandle = NdisFilterHandle;
 		FilterContext->MaxFrameSize = 0;
 
-		
+
 
 		NET_BUFFER_LIST_POOL_PARAMETERS PoolParameters;
 		NdisZeroMemory(&PoolParameters, sizeof(NET_BUFFER_LIST_POOL_PARAMETERS));
@@ -318,7 +318,8 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 			BYTE* EthDataPtr;
 			ULONG DataLength = CurrentNB->DataLength;
 			ULONG PacketBufferLength = DataLength;
-			BYTE* PacketBuffer;
+			BYTE* PacketBuffer = NULL;
+			PETH_HEADER PacketEthHeader;
 			HOOK_RESULT OutputFilterResult;
 			HOOK_RESULT PostroutingFilterResult;
 			PMDL PostroutingMDL;
@@ -337,6 +338,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 			if (EthDataPtr != (PacketBuffer)) {
 				RtlCopyMemory(PacketBuffer, EthDataPtr, DataLength);
 			}
+			PacketEthHeader = (PETH_HEADER)PacketBuffer;
 
 			do
 			{
@@ -416,11 +418,25 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 				if (OutputFilterResult.Modified || PostroutingFilterResult.Modified) {
 					NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
 					ChecksumOffloadInfo.Value = 0;
-					ChecksumOffloadInfo.Transmit.IpHeaderChecksum = TryCalcModifiedTxPacketIPChecksumByNIC;
-					ChecksumOffloadInfo.Transmit.TcpChecksum = TryCalcModifiedTxPacketTCPChecksumByNIC;
-					ChecksumOffloadInfo.Transmit.UdpChecksum = TryCalcModifiedTxPacketUDPChecksumByNIC;
-					PostroutingNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
+					ChecksumOffloadInfo.Transmit.IsIPv4 = (ETH_HEADER_PROTOCOL(PacketEthHeader) == ETH_PROTOCOL_IP);
+					ChecksumOffloadInfo.Transmit.IsIPv6 = (ETH_HEADER_PROTOCOL(PacketEthHeader) == ETH_PROTOCOL_IPV6);
+					ChecksumOffloadInfo.Transmit.IpHeaderChecksum = (ChecksumOffloadInfo.Transmit.IsIPv4 | ChecksumOffloadInfo.Transmit.IsIPv6) & TryCalcModifiedTxPacketIPChecksumByNIC;
 
+					ChecksumOffloadInfo.Transmit.TcpChecksum =
+						(ChecksumOffloadInfo.Transmit.IsIPv4?
+							IPV4_HEADER_PROTOCOL((PIPV4_HEADER)GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == TCP: 
+							(ChecksumOffloadInfo.Transmit.IsIPv6 ? 
+								GetTransportLayerProtocolFromIPv6Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == TCP :
+								FALSE) 
+							& TryCalcModifiedTxPacketTCPChecksumByNIC);
+					ChecksumOffloadInfo.Transmit.UdpChecksum =
+						(ChecksumOffloadInfo.Transmit.IsIPv4 ?
+							IPV4_HEADER_PROTOCOL((PIPV4_HEADER)GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == UDP :
+							(ChecksumOffloadInfo.Transmit.IsIPv6 ?
+								GetTransportLayerProtocolFromIPv6Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == UDP :
+								FALSE)
+							& TryCalcModifiedTxPacketTCPChecksumByNIC);
+					PostroutingNBL->NetBufferListInfo[TcpIpChecksumNetBufferListInfo] = ChecksumOffloadInfo.Value;
 				}
 
 
@@ -550,7 +566,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 						DestIpAddressBytes = ((PIPV6_HEADER)IpHeader)->DestAddress.AddressBytes;
 					}
 
-					ForwardingFlag = IsValidForwardAddress(EtherProtocol, FilterContext->BasePortIndex, DestIpAddressBytes);
+					ForwardingFlag = IsValidForwardAddress(EtherProtocol, FilterContext->BasePortLuid, DestIpAddressBytes);
 				}
 
 
@@ -563,7 +579,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					break;
 				}
 			}
-			
+
 			/*========== THE INPUT FILTER POINT ==========*/
 			InputFilterResult = FilterEthernetPacket(
 				PacketBuffer,

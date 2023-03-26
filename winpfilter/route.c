@@ -96,7 +96,7 @@ VOID RouteTableChangeNotifyCallback(PVOID CallerContext, PMIB_IPFORWARD_ROW2 Row
 	PMIB_IPFORWARD_ROW2 Item;
 	IP_ADDRESS RouteDestination;
 	IP_ADDRESS NextHop;
-	ULONG InterfaceID;
+	NET_LUID InterfaceLuid;
 	ULONG Metric;
 
 	NTSTATUS Status = GetIpForwardTable2(AF_UNSPEC, &SystemRouteTable);
@@ -112,7 +112,7 @@ VOID RouteTableChangeNotifyCallback(PVOID CallerContext, PMIB_IPFORWARD_ROW2 Row
 
 		InitializeIPAddressBySockAddrINet(&RouteDestination, &Item->DestinationPrefix.Prefix, Item->DestinationPrefix.PrefixLength);
 		InitializeIPAddressBySockAddrINet(&NextHop, &Item->NextHop, BYTE_MAX_VALUE);
-		InterfaceID = Item->InterfaceIndex;
+		InterfaceLuid = Item->InterfaceLuid;
 		Metric = Item->Metric;
 
 	}
@@ -127,32 +127,32 @@ VOID UnicastIpAddressChangeNotifyCallback(PVOID CallerContext, PMIB_UNICASTIPADD
 	PMIB_UNICASTIPADDRESS_TABLE UnicastIPTable;
 	ULONG UnicastIPTableItemCounts;
 	PMIB_UNICASTIPADDRESS_ROW UnicastIPTableItem;
-	IF_INDEX InterfaceIndex;
-	
+	IP_ADDRESS Address;
+
 	NTSTATUS Status = GetUnicastIpAddressTable(AF_UNSPEC, &UnicastIPTable);
 
 	if (!NT_SUCCESS(Status)) {
 		return;
 	}
 
+	DeleteAllInterfaceIPCache();
 
 	UnicastIPTableItemCounts = UnicastIPTable->NumEntries;
-
 	for (ULONG i = 0; i < UnicastIPTableItemCounts; i++) {
 		UnicastIPTableItem = &UnicastIPTable->Table[i];
-		InterfaceIndex = UnicastIPTableItem->InterfaceIndex;
 
+		InitializeIPAddressBySockAddrINet(&Address, &UnicastIPTableItem->Address, UnicastIPTableItem->OnLinkPrefixLength);
+		InsertIntoInterfaceIPCache(UnicastIPTableItem->InterfaceLuid, Address);
 
-		
 	}
 
 	FreeMibTable(UnicastIPTable);
 
 }
 
-BYTE IsValidForwardAddress(USHORT Protocol, IF_INDEX InterfaceIndex, BYTE* IpAddress) {
+BYTE IsValidForwardAddress(USHORT Protocol, NET_LUID InterfaceLuid, BYTE* IpAddress) {
 
-	TRACE_DBG("IPPacket info: Protocol: %d; IfId: %d; Addr(First4bytes): %d,%d,%d,%d\n", Protocol, InterfaceIndex, IpAddress[0], IpAddress[1], IpAddress[2], IpAddress[3]);
+	TRACE_DBG("IPPacket info: Protocol: %d; LuId: %lld; Addr(First4bytes): %d,%d,%d,%d\n", Protocol, InterfaceLuid.Value, IpAddress[0], IpAddress[1], IpAddress[2], IpAddress[3]);
 	
 	if (Protocol == ETH_PROTOCOL_IP) {
 		switch (IpAddress[0])
@@ -178,7 +178,7 @@ BYTE IsValidForwardAddress(USHORT Protocol, IF_INDEX InterfaceIndex, BYTE* IpAdd
 		}
 
 		// Look for local IP
-		if (RtlEqualMemory(IpAddress, IpAddress, IPV4_ADDRESS_BYTE_LENGTH)) {
+		if (IsLocalIP(IpAddress, IP)) {
 			return FALSE;
 		}
 
@@ -193,7 +193,7 @@ BYTE IsValidForwardAddress(USHORT Protocol, IF_INDEX InterfaceIndex, BYTE* IpAdd
 
 		// Look for local IP
 
-		if (RtlEqualMemory(IpAddress, IpAddress, IPV6_ADDRESS_BYTE_LENGTH)) {
+		if (IsLocalIP(IpAddress, IPV6)) {
 			return FALSE;
 		}
 

@@ -31,7 +31,7 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 	StopMonitorUnicastIpChange();
 	StopMonitorSystemRouteTableChange();
 	NdisFDeregisterFilterDriver(FilterDriverHandle);
-	FreeInterfaceIPCache();
+	FreeInterfaceIPCacheManager();
 	NdisFreeSpinLock(&FilterListLock);
 
 	TRACE_EXIT();
@@ -125,7 +125,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		InitializeListHead(&FilterModuleList);
 
 
-		Status = InitializeInterfaceIPCache(FilterDriverObject);
+		Status = InitializeInterfaceIPCacheManager(FilterDriverObject);
 		if (!NT_SUCCESS(Status)) {
 			break;
 		}
@@ -207,7 +207,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		StopMonitorUnicastIpChange();
 		StopMonitorSystemRouteTableChange();
 		NdisFDeregisterFilterDriver(FilterDriverHandle);
-		FreeInterfaceIPCache();
+		FreeInterfaceIPCacheManager();
 		NdisFreeSpinLock(&FilterListLock);
 	}
 

@@ -165,7 +165,7 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 			case WINPFILTER_CTL_CODE_HOOK_INFO:
 				// Get only: Hook info
 				if (*Value < HOOK_LIST_COUNT) {
-					*Value = GetHookInformation(*Value, KernelBuffer+ NeedBufferLength, OutputBufferLeng- NeedBufferLength);
+					*Value = GetHookInformation(*Value, (PHOOK_INFO)(KernelBuffer+ NeedBufferLength), OutputBufferLeng- NeedBufferLength);
 					Irp->IoStatus.Information = OutputBufferLeng;
 				}
 				else {

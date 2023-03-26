@@ -127,6 +127,7 @@
     <ClCompile Include="interface_ip_table.c" />
     <ClCompile Include="ip.c" />
     <ClCompile Include="forwarding_engine.c" />
+    <ClCompile Include="ipv6.c" />
     <ClCompile Include="queue.c" />
     <ClCompile Include="route.c" />
     <ClCompile Include="winpfilter.c" />

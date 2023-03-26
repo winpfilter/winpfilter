@@ -60,7 +60,7 @@ NTSTATUS RegisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT F
 BOOLEAN UnregisterHook(HOOK_FUNCTION HookFunction, ULONG Priority, FILTER_POINT FilterPoint);
 VOID UnregisterAllHooks(FILTER_POINT FilterPoint);
 VOID FreeFilterHookManager();
-HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength, ULONG BufferLength, FILTER_POINT FilterPoint, NET_LUID InterfaceIndex, UCHAR DispatchLevel);
+HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength, ULONG BufferLength, FILTER_POINT FilterPoint, NET_LUID InterfaceLuid, UCHAR DispatchLevel);
 
 #ifdef DBG
 VOID PrintHookTable();

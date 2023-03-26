@@ -57,6 +57,9 @@
     <ClCompile Include="communication.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ipv6.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\net\ether.h">

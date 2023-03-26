@@ -1,20 +1,24 @@
 #include "interface_ip_table.h"
 
-NTSTATUS InitializeInterfaceIPCache(NDIS_HANDLE Handle) {
+NTSTATUS InitializeInterfaceIPCacheManager(NDIS_HANDLE Handle) {
 	NTSTATUS Status = STATUS_SUCCESS;
 	
 	return Status;
 }
 
-VOID FreeInterfaceIPCache() {
+VOID FreeInterfaceIPCacheManager() {
 
 }
 
-VOID InsertIntoInterfaceIPCache(IF_INDEX InterfaceIndex, PFILTER_CONTEXT Context) {
+VOID InsertIntoInterfaceIPCache(NET_LUID InterfaceLuid, IP_ADDRESS Address) {
 
 }
 
-VOID DeleteFromInterfaceIPCache(IF_INDEX InterfaceIndex) {
+VOID DeleteAllInterfaceIPCache() {
 
+
+}
+
+BOOLEAN IsLocalIP(BYTE* Address, IP_PROTOCOLS EtherNetProtocol) {
 
 }
