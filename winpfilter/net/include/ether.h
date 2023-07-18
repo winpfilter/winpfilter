@@ -18,8 +18,14 @@ typedef struct _ETH_HEADER
 }ETH_HEADER,*PETH_HEADER;
 #pragma pack ()
 
-#define ETH_HEADER_PROTOCOL(header)						(CONVERT_NETE_16((header)->Protocol))
+inline USHORT GetEtherHeaderProtocol(PETH_HEADER header) {
+	return CONVERT_NETE_16(header->Protocol);
+}
 
-#define SET_ETH_HEADER_PROTOCOL(header,protocol)		((header)->Protocol = CONVERT_NETE_16(protocol))
+inline VOID SetEtherHeaderProtocol(PETH_HEADER header, USHORT protocol) {
+	header->Protocol = CONVERT_NETE_16(protocol);
+}
 
-#define GetNetworkLayerHeaderFromEtherHeader(ethheader)		((BYTE*)(((BYTE*)ethheader) + sizeof(ETH_HEADER)))
+inline PVOID GetNetworkLayerHeaderFromEtherHeader(PETH_HEADER header) {
+	return (PVOID)((BYTE*)header + sizeof(ETH_HEADER));
+}

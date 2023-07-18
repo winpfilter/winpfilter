@@ -3,8 +3,27 @@
 
 #include "winpfilter.h"
 #include "converter.h"
-#include "net/ipv4.h"
-#include "net/ipv6.h"
+
+typedef enum _IP_PROTOCOLS
+{
+	IP = 0,
+	IPV6_EXT_HOPOPT = 0,
+	ICMP = 1,
+	IGMP = 2,
+	TCP = 6,
+	UDP = 17,
+	IPV6 = 41,
+	IPV6_EXT_ROUTE = 43,
+	IPV6_EXT_FRAG = 44,
+	IPV6_EXT_ESP = 50,
+	IPV6_EXT_AH = 51,
+	ICMPV6 = 58,
+	IPV6_EXT_NONXT = 59,
+	IPV6_EXT_OPTS = 60
+}IP_PROTOCOLS;
+
+#include "ipv4.h"
+#include "ipv6.h"
 
 typedef struct _IP_ADDRESS {
 	BYTE Family;
@@ -29,27 +48,14 @@ typedef struct _IP_ADDRESS_LINK {
 }IP_ADDRESS_LINK, * PIP_ADDRESS_LINK;
 
 
-typedef enum _IP_PROTOCOLS
-{
-	IP					= 0,
-	IPV6_EXT_HOPOPT		= 0,
-	ICMP				= 1,
-	IGMP				= 2,
-	TCP					= 6,
-	UDP					= 17,
-	IPV6				= 41,
-	IPV6_EXT_ROUTE		= 43,
-	IPV6_EXT_FRAG		= 44,
-	IPV6_EXT_ESP		= 50,
-	IPV6_EXT_AH			= 51,
-	ICMPV6		  		= 58,
-	IPV6_EXT_NONXT		= 59,
-	IPV6_EXT_OPTS		= 60
-}IP_PROTOCOLS;
 
 
+inline BYTE GetIPHeaderVersion(PVOID header) {
+	return ((PIPV4_HEADER)header)->Version;
+}
 
-#define IP_HEADER_VERSION(header)						((header)->Version)
-#define SET_IP_HEADER_VERSION(header,version)			((header)->Version = (BYTE)version)
+inline VOID SetIPHeaderVersion(PVOID header,BYTE version) {
+	((PIPV4_HEADER)header)->Version = version;
+}
 
 VOID InitializeIPAddressBySockAddrINet(PIP_ADDRESS IPAddress, PSOCKADDR_INET SockAddress, BYTE PrefixLength);

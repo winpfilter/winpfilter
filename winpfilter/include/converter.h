@@ -2,12 +2,20 @@
 
 
 #if  BIG_ENDIAN
-#define CONVERT_NETE_16(u16_val) ((USHORT)u16_val)
+inline USHORT CONVERT_NETE_16(USHORT u16_val) {
+	return u16_val;
+}
 #else
-#define CONVERT_NETE_16(u16_val) ((USHORT)((((USHORT)u16_val)&0xff)<<8)|(((USHORT)u16_val)>>8))
+inline USHORT CONVERT_NETE_16(USHORT u16_val) {
+	return (USHORT)(((u16_val & 0xff) << 8) | (u16_val >> 8));
+}
 #endif
 #if  BIG_ENDIAN
-#define CONVERT_NETE_32(u32_val) ((ULONG)u32_val)
+inline ULONG CONVERT_NETE_16(ULONG u32_val) {
+	return u32_val;
+}
 #else
-#define CONVERT_NETE_32(u32_val) ((ULONG)((((ULONG)u32_val)&0xff)<<24)|((((ULONG)u32_val)&0xff00)<<8)|((((ULONG)u32_val)&0xff0000)>>8)|(((ULONG)u32_val)>>24))
+inline ULONG CONVERT_NETE_32(ULONG u32_val) {
+	return (ULONG)(((u32_val & 0xff) << 24) | ((u32_val & 0xff00) << 8) | ((u32_val & 0xff0000) >> 8) | (u32_val >> 24));
+}
 #endif

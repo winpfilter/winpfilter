@@ -14,6 +14,7 @@ ClassGUID       = {4D36E974-E325-11CE-BFC1-08002BE10318}
 Provider        = %Msft%
 DriverVer       = 
 CatalogFile     = winpfilter.cat
+PnpLockdown		= 1
 
 
 ; TODO: Include each architecture for which your driver package contains a

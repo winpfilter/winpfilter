@@ -1,4 +1,4 @@
-#include "net/ip.h"
+#include "ip.h"
 
 #ifdef DBG
 VOID PrintIPAddress(PIP_ADDRESS addr) {

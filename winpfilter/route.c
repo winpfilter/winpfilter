@@ -1,8 +1,8 @@
 #include "route.h"
 #include "global_variables.h"
 #include "filter_subroutines.h"
-#include "net/ip.h"
-#include "net/ether.h"
+#include "ip.h"
+#include "ether.h"
 
 BOOLEAN IsSystemRouteTableChangeMonitorActive = FALSE;
 HANDLE WPFilterRouteTableChangeNotifyHandle = NULL;

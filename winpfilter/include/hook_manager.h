@@ -31,7 +31,7 @@ typedef  HOOK_ACTION(__fastcall *HOOK_FUNCTION)(NET_LUID InterfaceLuid, FILTER_P
 
 typedef union _HOOK_RESULT {
 	ULONG	Result;
-	struct MyStruct
+	struct
 	{
 		BYTE	Accept;
 		BYTE	Modified;

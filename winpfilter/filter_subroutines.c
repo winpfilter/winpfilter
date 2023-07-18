@@ -8,8 +8,8 @@
 #include "hook_manager.h"
 #include "route.h"
 #include "global_variables.h"
-#include "net/ether.h"
-#include "net/ip.h"
+#include "ether.h"
+#include "ip.h"
 
 VOID FreeSingleNBL(PNET_BUFFER_LIST NetBufferList);
 
@@ -264,36 +264,39 @@ NDIS_STATUS WPFilterSetModuleOptions(NDIS_HANDLE FilterModuleContext) {
 	return status;
 }
 
-#define LinkSingleNBLIntoNBLChainTail(ChainHead,ChainTail,SingleNBLNode) {	\
-	NET_BUFFER_LIST_NEXT_NBL(SingleNBLNode) = NULL;							\
-	if (ChainHead == NULL || ChainTail == NULL) {							\
-		ChainHead = SingleNBLNode;											\
-		ChainTail = ChainHead;												\
-	} else {																\
-		NET_BUFFER_LIST_NEXT_NBL(ChainTail) = SingleNBLNode;				\
-		ChainTail = NET_BUFFER_LIST_NEXT_NBL(ChainTail);					\
-	}																		\
+inline VOID LinkSingleNBLIntoNBLChainTail(PNET_BUFFER_LIST* pChainHead, PNET_BUFFER_LIST* pChainTail, PNET_BUFFER_LIST SingleNBLNode)
+{
+	NET_BUFFER_LIST_NEXT_NBL(SingleNBLNode) = NULL;
+	if (*pChainHead == NULL || *pChainTail == NULL) {
+		*pChainHead = SingleNBLNode;
+		*pChainTail = *pChainHead;
+	}
+	else {
+		NET_BUFFER_LIST_NEXT_NBL(*pChainTail) = SingleNBLNode;
+		*pChainTail = NET_BUFFER_LIST_NEXT_NBL(*pChainTail);
+	}
 }
 
-#define LinkSingleNBLIntoNBLChainHead(ChainHead,SingleNBLNode) {	\
-	NET_BUFFER_LIST_NEXT_NBL(SingleNBLNode) = ChainHead;			\
-	ChainHead = SingleNBLNode;										\
+
+inline VOID LinkSingleNBLIntoNBLChainHead(PNET_BUFFER_LIST* pChainHead, PNET_BUFFER_LIST SingleNBLNode) {
+	NET_BUFFER_LIST_NEXT_NBL(SingleNBLNode) = *pChainHead;			
+	*pChainHead = SingleNBLNode;
 }
 
-#define RemoveSingleNBLFromNBLChainHead(ChainHead) {		\
-	if(ChainHead != NULL){									\
-		ChainHead = NET_BUFFER_LIST_NEXT_NBL(ChainHead);	\
-	}														\
+inline VOID RemoveSingleNBLFromNBLChainHead(PNET_BUFFER_LIST* pChainHead) {
+	if (*pChainHead != NULL) {
+		*pChainHead = NET_BUFFER_LIST_NEXT_NBL(*pChainHead);
+	}
 }
 
-#define DropPacket(CanNotPend,NBLDropListHeader,SingleNBLPendingDrop,DropCounter,DroppedFlag) {	\
-	if(!DroppedFlag){																			\
-		if (!CanNotPend) {																		\
-			LinkSingleNBLIntoNBLChainHead(NBLDropListHeader, SingleNBLPendingDrop);				\
-		}																						\
-		DropCounter++;																			\
-		DroppedFlag = TRUE;																		\
-	}																							\
+inline VOID DropPacket(BOOLEAN CanNotPend, PNET_BUFFER_LIST* NBLDropListHeader, PNET_BUFFER_LIST SingleNBLPendingDrop, ULONG* DropCounter, BOOLEAN* DroppedFlag) {
+	if (!(*DroppedFlag)) {
+		if (!CanNotPend) {
+			LinkSingleNBLIntoNBLChainHead(NBLDropListHeader, SingleNBLPendingDrop);
+		}
+		(*DropCounter)++;
+		*DroppedFlag = TRUE;
+	}
 }
 
 VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER PortNumber, ULONG SendFlags) {
@@ -310,7 +313,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 	while (CurrentNBL != NULL) {
 
 		NextNBL = NET_BUFFER_LIST_NEXT_NBL(CurrentNBL);
-		LinkSingleNBLIntoNBLChainHead(CompleteNBL, CurrentNBL);
+		LinkSingleNBLIntoNBLChainHead(&CompleteNBL, CurrentNBL);
 
 		for (NET_BUFFER* CurrentNB = NET_BUFFER_LIST_FIRST_NB(CurrentNBL); CurrentNB != NULL; CurrentNB = NET_BUFFER_NEXT_NB(CurrentNB)) {
 
@@ -390,16 +393,20 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 				if ((!PostroutingFilterResult.Accept) && (!PostroutingFilterResult.Modified)) {
 					break;
 				}
+				// BUG:
+				//		Some of the NIC driver did not consider the NBLs in the same NBL chain
+				//		with different context.
+				//
+				//if ((!PostroutingFilterResult.Modified) && (NET_BUFFER_LIST_FIRST_NB(CurrentNBL)->Next == NULL)) {
+				//	// Not modified and only one NB in this NBL
 
-				if ((!PostroutingFilterResult.Modified) && (NET_BUFFER_LIST_FIRST_NB(CurrentNBL)->Next == NULL)) {
-					// Not modified and only one NB in this NBL
+				//	RemoveSingleNBLFromNBLChainHead(CompleteNBL);
+				//	NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
+				//	LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, CurrentNBL);
 
-					RemoveSingleNBLFromNBLChainHead(CompleteNBL);
-					NET_BUFFER_LIST_NEXT_NBL(CurrentNBL) = NULL;
-					LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, CurrentNBL);
-
-					break;
-				}
+				//	break;
+				//}
+				//
 
 				PostroutingMDL = NdisAllocateMdl(FilterContext->FilterHandle, PacketBuffer, PacketBufferLength);
 				if (PostroutingMDL == NULL) {
@@ -418,20 +425,20 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 				if (OutputFilterResult.Modified || PostroutingFilterResult.Modified) {
 					NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO ChecksumOffloadInfo;
 					ChecksumOffloadInfo.Value = 0;
-					ChecksumOffloadInfo.Transmit.IsIPv4 = (ETH_HEADER_PROTOCOL(PacketEthHeader) == ETH_PROTOCOL_IP);
-					ChecksumOffloadInfo.Transmit.IsIPv6 = (ETH_HEADER_PROTOCOL(PacketEthHeader) == ETH_PROTOCOL_IPV6);
+					ChecksumOffloadInfo.Transmit.IsIPv4 = (GetEtherHeaderProtocol(PacketEthHeader) == ETH_PROTOCOL_IP);
+					ChecksumOffloadInfo.Transmit.IsIPv6 = (GetEtherHeaderProtocol(PacketEthHeader) == ETH_PROTOCOL_IPV6);
 					ChecksumOffloadInfo.Transmit.IpHeaderChecksum = (ChecksumOffloadInfo.Transmit.IsIPv4 | ChecksumOffloadInfo.Transmit.IsIPv6) & TryCalcModifiedTxPacketIPChecksumByNIC;
 
 					ChecksumOffloadInfo.Transmit.TcpChecksum =
 						(ChecksumOffloadInfo.Transmit.IsIPv4?
-							IPV4_HEADER_PROTOCOL((PIPV4_HEADER)GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == TCP: 
+							GetIPv4HeaderProtocol((PIPV4_HEADER)GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == TCP: 
 							(ChecksumOffloadInfo.Transmit.IsIPv6 ? 
 								GetTransportLayerProtocolFromIPv6Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == TCP :
 								FALSE) 
 							& TryCalcModifiedTxPacketTCPChecksumByNIC);
 					ChecksumOffloadInfo.Transmit.UdpChecksum =
 						(ChecksumOffloadInfo.Transmit.IsIPv4 ?
-							IPV4_HEADER_PROTOCOL((PIPV4_HEADER)GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == UDP :
+							GetIPv4HeaderProtocol((PIPV4_HEADER)GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == UDP :
 							(ChecksumOffloadInfo.Transmit.IsIPv6 ?
 								GetTransportLayerProtocolFromIPv6Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) == UDP :
 								FALSE)
@@ -440,7 +447,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 				}
 
 
-				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, PostroutingNBL);
+				LinkSingleNBLIntoNBLChainTail(&AcceptListHead, &AcceptListTail, PostroutingNBL);
 				FreeFlag = FALSE;
 			} while (FALSE);
 
@@ -449,6 +456,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 			}
 
 		}
+		
 		CurrentNBL = NextNBL;
 	}
 
@@ -456,7 +464,7 @@ VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST 
 		NdisFSendNetBufferListsComplete(FilterContext->FilterHandle, CompleteNBL, SendFlags);
 	}
 	if (AcceptListHead != NULL) {
-		NdisFSendNetBufferLists(FilterContext->FilterHandle, AcceptListHead, PortNumber, SendFlags);
+		NdisFSendNetBufferLists(FilterContext->FilterHandle,AcceptListHead, PortNumber, SendFlags);
 	}
 }
 
@@ -518,7 +526,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 		do {
 			if (DataLength == 0 || DataLength > PacketBufferLength) {
 				// It must not occurr. Return the NBL.
-				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+				DropPacket(CanNotPend, &ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 				break;
 			}
 
@@ -543,7 +551,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 			if (!PreroutingFilterResult.Accept) {
 				// Drop this packet
-				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+				DropPacket(CanNotPend, &ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 
 				// If not modified, go next packet, otherwise continue process this one
 				if (!PreroutingFilterResult.Modified) {
@@ -554,7 +562,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 			if (IPForwardingMode != IP_FORWARDING_MODE_SYSTEM) {
 				//PIPV6_HEADER Ipv6Header = GetNetworkLayerHeaderFromEtherHeader(EtherHeader);
-				EtherProtocol = ETH_HEADER_PROTOCOL(EtherHeader);
+				EtherProtocol = GetEtherHeaderProtocol(EtherHeader);
 				if (EtherProtocol == ETH_PROTOCOL_IP || EtherProtocol == ETH_PROTOCOL_IPV6) {
 
 					if (EtherProtocol == ETH_PROTOCOL_IP) {
@@ -575,7 +583,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					if (IPForwardingMode == IP_FORWARDING_MODE_WINPFILTER) {
 						//ForwardPacket(ETH_HEADER_PROTOCOL(EtherHeader), DestIpAddressBytes, PacketBuffer, DataLength);
 					}
-					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					DropPacket(CanNotPend,& ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 					break;
 				}
 			}
@@ -592,7 +600,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 			if (!InputFilterResult.Accept) {
 				// Drop this packet
-				DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+				DropPacket(CanNotPend, &ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 
 				// If not modified, go next packet, otherwise continue process this one
 				if (!InputFilterResult.Modified) {
@@ -610,7 +618,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				IndicatePacketBuffer = ExAllocatePoolWithTag(NonPagedPoolNx, DataLength, NET_PACKET_ALLOC_TAG);
 				if (IndicatePacketBuffer == NULL) {
 					// Error occurred! Drop this packet
-					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					DropPacket(CanNotPend, &ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 					break;
 				}
 				// Second, Allocate an MDL for the buffer and copy the data
@@ -618,7 +626,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 				if (IndicatePacketBufferMDL == NULL) {
 					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
 					// Error occurred! Drop this packet
-					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					DropPacket(CanNotPend, &ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 					break;
 				}
 				RtlZeroMemory(IndicatePacketBuffer, DataLength);
@@ -629,7 +637,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 					// Error occurred! Drop this packet
 					NdisFreeMdl(IndicatePacketBufferMDL);
 					ExFreePoolWithTag(IndicatePacketBuffer, NET_PACKET_ALLOC_TAG);
-					DropPacket(CanNotPend, ReturnList, CurrentNBL, ReturnListNBLCnt, Dropped);
+					DropPacket(CanNotPend, &ReturnList, CurrentNBL, &ReturnListNBLCnt, &Dropped);
 					break;
 				}
 
@@ -648,7 +656,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 			// Indicate up this packet
 			AcceptListNBLCnt++;
 			if (!CanNotPend) {
-				LinkSingleNBLIntoNBLChainTail(AcceptListHead, AcceptListTail, IndicateNBL);
+				LinkSingleNBLIntoNBLChainTail(&AcceptListHead, &AcceptListTail, IndicateNBL);
 				break;
 			}
 

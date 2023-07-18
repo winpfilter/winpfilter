@@ -20,6 +20,9 @@
     <Filter Include="Header Files\net">
       <UniqueIdentifier>{aea0be35-f64e-4657-9147-416089f23837}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\net">
+      <UniqueIdentifier>{a06cd25f-f9e3-428e-86b3-20e808e148bc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <Inf Include="winpfilter.inf">
@@ -39,9 +42,6 @@
     <ClCompile Include="route.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ip.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="hook_manager.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -57,23 +57,11 @@
     <ClCompile Include="communication.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ipv6.c">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="net\ip.c">
+      <Filter>Source Files\net</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\net\ether.h">
-      <Filter>Header Files\net</Filter>
-    </ClInclude>
-    <ClInclude Include="include\net\ipv4.h">
-      <Filter>Header Files\net</Filter>
-    </ClInclude>
-    <ClInclude Include="include\net\ipv6.h">
-      <Filter>Header Files\net</Filter>
-    </ClInclude>
-    <ClInclude Include="include\net\udp.h">
-      <Filter>Header Files\net</Filter>
-    </ClInclude>
     <ClInclude Include="include\converter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -85,12 +73,6 @@
     </ClInclude>
     <ClInclude Include="include\winpfilter.h">
       <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="include\net\ip.h">
-      <Filter>Header Files\net</Filter>
-    </ClInclude>
-    <ClInclude Include="include\net\tcp.h">
-      <Filter>Header Files\net</Filter>
     </ClInclude>
     <ClInclude Include="include\route.h">
       <Filter>Header Files</Filter>
@@ -109,6 +91,24 @@
     </ClInclude>
     <ClInclude Include="include\communication.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="net\include\ipv6.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\include\tcp.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\include\udp.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\include\ether.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\include\ip.h">
+      <Filter>Header Files\net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\include\ipv4.h">
+      <Filter>Header Files\net</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

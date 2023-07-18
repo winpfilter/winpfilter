@@ -11,7 +11,7 @@
 #include <ndis.h>
 #include <limits.h>
 
-#define WINPFILTER_VERSION 20230215
+#define WINPFILTER_VERSION 20230717
 
 #define NDIS_MAJOR_VERSION 6
 #define NDIS_MINOR_VERSION 20
