@@ -10,7 +10,7 @@
 #include "hook_manager.h"
 #include "global_variables.h"
 #include "communication.h"
-
+#include "routing_engine.h"
 
 VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 
@@ -32,6 +32,7 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 	StopMonitorSystemRouteTableChange();
 	NdisFDeregisterFilterDriver(FilterDriverHandle);
 	FreeInterfaceIPCacheManager();
+	StopRoutingEngine();
 	NdisFreeSpinLock(&FilterListLock);
 
 	TRACE_EXIT();
@@ -124,6 +125,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		NdisAllocateSpinLock(&FilterListLock);
 		InitializeListHead(&FilterModuleList);
 
+		StartRoutingEngine();
 
 		Status = InitializeInterfaceIPCacheManager(FilterDriverObject);
 		if (!NT_SUCCESS(Status)) {
@@ -208,6 +210,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		StopMonitorSystemRouteTableChange();
 		NdisFDeregisterFilterDriver(FilterDriverHandle);
 		FreeInterfaceIPCacheManager();
+		StopRoutingEngine();
 		NdisFreeSpinLock(&FilterListLock);
 	}
 

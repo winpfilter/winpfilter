@@ -4,35 +4,42 @@ VOID InitializeQueue(PQUEUE Queue) {
 	if (Queue == NULL) {
 		return;
 	}
-	Queue->Queue.Next = NULL;
 	Queue->ItemCounts = 0;
-	Queue->QueueTail = &Queue->Queue;
-	KeInitializeSemaphore(&Queue->CountsSemaphore,0,0x7fffffff);
-	NdisAllocateSpinLock(&Queue->HeadLock);
-	NdisAllocateSpinLock(&Queue->TailLock);
+	NdisAllocateSpinLock(&(Queue->QueueLock));
+	InitializeListHead(&(Queue->QueueLink));
+	KeInitializeEvent(&(Queue->DataEnqueueEvent), NotificationEvent, FALSE);
 }
 
-PSINGLE_LIST_ENTRY Dequeue(PQUEUE Queue,BOOLEAN DispatchLevel) {
-	PSINGLE_LIST_ENTRY ReturnItem;
-	if (!DispatchLevel) {
-		KeWaitForSingleObject(&Queue->CountsSemaphore, Executive, KernelMode, FALSE, NULL);
+VOID FreeQueue(PQUEUE Queue) {
+	if (Queue == NULL) {
+		return;
 	}
-	NdisAcquireSpinLock(&Queue->HeadLock);
-	ReturnItem = Queue->Queue.Next;
-	if (ReturnItem != NULL) {
-		Queue->Queue.Next = ReturnItem->Next;
-		ReturnItem->Next = NULL;
+	NdisFreeSpinLock(&(Queue->QueueLock));
+}
+
+PLIST_ENTRY Dequeue(PQUEUE Queue) {
+	PLIST_ENTRY ReturnItem;
+	NdisAcquireSpinLock(&(Queue->QueueLock));
+	if (Queue->ItemCounts <= 0) {
+		KeClearEvent(&(Queue->DataEnqueueEvent));
+		NdisReleaseSpinLock(&(Queue->QueueLock));
+		return NULL;
 	}
-	Queue->ItemCounts--;
-	NdisReleaseSpinLock(&Queue->HeadLock);
+	ReturnItem = RemoveHeadList(&(Queue->QueueLink));
+	if ((--Queue->ItemCounts) == 0) {
+		KeClearEvent(&(Queue->DataEnqueueEvent));
+	}
+	NdisReleaseSpinLock(&(Queue->QueueLock));
 	return ReturnItem;
 }
 
-VOID Enqueue(PQUEUE Queue,PSINGLE_LIST_ENTRY Item) {
-	NdisAcquireSpinLock(&Queue->TailLock);
-	Queue->QueueTail->Next = Item;
-	Queue->QueueTail = Item;
+VOID Enqueue(PQUEUE Queue, PLIST_ENTRY Item) {
+	if (Item == NULL) {
+		return;
+	}
+	NdisAcquireSpinLock(&(Queue->QueueLock));
+	InsertTailList(&(Queue->QueueLink), Item);
 	Queue->ItemCounts++;
-	KeReleaseSemaphore(&Queue->CountsSemaphore, IO_NO_INCREMENT, 1, FALSE);
-	NdisReleaseSpinLock(&Queue->TailLock);
+	KeSetEvent(&(Queue->DataEnqueueEvent), IO_NO_INCREMENT, FALSE);
+	NdisReleaseSpinLock(&(Queue->QueueLock));
 }
