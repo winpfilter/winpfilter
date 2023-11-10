@@ -44,7 +44,7 @@ VOID PreroutingThread() {
 		);
 		/*========== END PRE_ROUTING FILTER POINT ==========*/
 
-		if (!PreroutingFilterResult.Accept && !PreroutingFilterResult.Modified) {
+		if (!PreroutingFilterResult.Accept) {
 			// Drop this packet
 			// If not modified, go next packet, otherwise continue process this one
 			FreeRoutingTask(Task);
@@ -125,7 +125,7 @@ VOID InputThread() {
 		);
 		/*========== END INPUT FILTER POINT ==========*/
 
-		if (!InputFilterResult.Accept && !InputFilterResult.Modified) {
+		if (!InputFilterResult.Accept) {
 			// Drop this packet
 			// If not modified, go next packet, otherwise continue process this one
 			FreeRoutingTask(Task);
@@ -175,7 +175,7 @@ VOID InputThread() {
 
 VOID ForwardingThread() {
 	TRACE_DBG("ForwardingThread Start\n");
-	PVOID WaitList[] = { &StopSignal ,&(TaskQueues[ROUTING_PROC_FORWARDING].DataEnqueueEvent) };
+	PVOID WaitList[] = { &StopSignal ,&(TaskQueues[ROUTING_PROC_FORWARDING].DataEnqueueEvent	) };
 	BYTE WaitBuffer[sizeof(KWAIT_BLOCK) * WaitCount];
 	while (ThreadFlag)
 	{
@@ -200,7 +200,7 @@ VOID ForwardingThread() {
 		);
 		/*========== END FORWARDING FILTER POINT ==========*/
 
-		if (!ForwardingFilterResult.Accept && !ForwardingFilterResult.Modified) {
+		if (!ForwardingFilterResult.Accept) {
 			// Drop this packet
 			// If not modified, go next packet, otherwise continue process this one
 			FreeRoutingTask(Task);
@@ -247,16 +247,6 @@ VOID OutputThread() {
 		);
 		/*========== END OUTPUT FILTER POINT ==========*/
 
-		if (OutputFilterResult.Modified) {
-			// Modified = TRUE 
-			// Accept = FALSE
-			//
-			// Join the routing decision queue
-			Task->DataBuffer.IsModified = TRUE;
-			ProcessRoutingTask(Task, ROUTING_PROC_RTDECISION);
-			continue;
-		}
-
 		if (!OutputFilterResult.Accept) {
 			// Modified = FALSE 
 			// Accept = FALSE
@@ -264,6 +254,17 @@ VOID OutputThread() {
 			FreeRoutingTask(Task);
 			continue;
 		}
+
+		if (OutputFilterResult.Modified) {
+			// Modified = TRUE 
+			// Accept = TRUE
+			//
+			// Join the routing decision queue
+			Task->DataBuffer.IsModified = TRUE;
+			ProcessRoutingTask(Task, ROUTING_PROC_RTDECISION);
+			continue;
+		}
+
 		// else
 		// Modified = FALSE 
 		// Accept = TRUE
@@ -303,7 +304,7 @@ VOID PostroutingThread() {
 		);
 		/*========== END POSTROUTING FILTER POINT ==========*/
 
-		if (!PostroutingFilterResult.Accept && !PostroutingFilterResult.Modified) {
+		if (!PostroutingFilterResult.Accept) {
 			// Drop this packet
 			// If not modified, go next packet, otherwise continue process this one
 			FreeRoutingTask(Task);
@@ -359,10 +360,10 @@ VOID PostroutingThread() {
 
 			if (ChecksumOffloadInfo.Transmit.TcpChecksum) {
 				if (ChecksumOffloadInfo.Transmit.IsIPv4) {
-					ChecksumOffloadInfo.Transmit.TcpHeaderOffset = (ULONGLONG)GetTransportLayerHeaderFromIPv4Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) - (ULONGLONG)PacketEthHeader;
+					ChecksumOffloadInfo.Transmit.TcpHeaderOffset =(ULONG)((ULONGLONG)GetTransportLayerHeaderFromIPv4Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) - (ULONGLONG)PacketEthHeader);
 				}
 				else {
-					ChecksumOffloadInfo.Transmit.TcpHeaderOffset = (ULONGLONG)GetTransportLayerHeaderFromIPv6Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) - (ULONGLONG)PacketEthHeader;
+					ChecksumOffloadInfo.Transmit.TcpHeaderOffset = (ULONG)((ULONGLONG)GetTransportLayerHeaderFromIPv6Header(GetNetworkLayerHeaderFromEtherHeader(PacketEthHeader)) - (ULONGLONG)PacketEthHeader);
 				}
 			}
 
@@ -386,7 +387,7 @@ VOID RoutingDecisionThread() {
 	while (ThreadFlag)
 	{
 		KeWaitForMultipleObjects(WaitCount, WaitList, WaitAny, Executive, KernelMode, FALSE, NULL, (PKWAIT_BLOCK)WaitBuffer);
-		TRACE_DBG("Processing Postrouting Task\n");
+		TRACE_DBG("Processing RoutingDecision Task\n");
 		PLIST_ENTRY ProcessingTaskListNode = Dequeue(&TaskQueues[ROUTING_PROC_RTDECISION]);
 		if (ProcessingTaskListNode == NULL) {
 			// Error or stop signal

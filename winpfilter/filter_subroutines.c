@@ -303,7 +303,7 @@ inline VOID DropPacket(BOOLEAN CanNotPend, PNET_BUFFER_LIST* NBLDropListHeader, 
 VOID WPFilterReceiveFromUpper(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST NetBufferLists, NDIS_PORT_NUMBER PortNumber, ULONG SendFlags) {
 
 	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
-	BOOLEAN DispatchLevel = NDIS_TEST_SEND_AT_DISPATCH_LEVEL(SendFlags);
+	//BOOLEAN DispatchLevel = NDIS_TEST_SEND_AT_DISPATCH_LEVEL(SendFlags);
 
 	PNET_BUFFER_LIST CurrentNBL = NetBufferLists;
 	PNET_BUFFER_LIST NextNBL = NULL;
@@ -350,7 +350,7 @@ VOID WPFilterReceiveFromNIC(NDIS_HANDLE FilterModuleContext, PNET_BUFFER_LIST Ne
 
 	PFILTER_CONTEXT FilterContext = (PFILTER_CONTEXT)FilterModuleContext;
 	BOOLEAN CanNotPend = NDIS_TEST_RECEIVE_CANNOT_PEND(ReceiveFlags);
-	BOOLEAN DispatchLevel = NDIS_TEST_RECEIVE_AT_DISPATCH_LEVEL(ReceiveFlags);
+	//BOOLEAN DispatchLevel = NDIS_TEST_RECEIVE_AT_DISPATCH_LEVEL(ReceiveFlags);
 
 	PNET_BUFFER_LIST CurrentNBL = NetBufferLists;
 

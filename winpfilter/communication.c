@@ -24,11 +24,8 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 
 		if (DeviceObject == WPFilterR0HookCommunicationDevice) {
 			// Used for hook management
-			ULONG* ModeOrStatus = (ULONG*)(KernelBuffer);
-			HOOK_FUNCTION* HookFunction = (HOOK_FUNCTION*)(ModeOrStatus + 1);
-			ULONG* Priority = (ULONG*)(HookFunction + 1);
-			FILTER_POINT* FilterPoint = (FILTER_POINT*)(Priority + 1);
-			ULONG  NeedBufferLength = (ULONG)(((ULONGLONG)(FilterPoint + 1)) - ((ULONGLONG)(KernelBuffer)));
+			PWINPFILTER_R0_HOOK_OP_STRUCTURE WinpfilterR0HookOPData = (PWINPFILTER_R0_HOOK_OP_STRUCTURE)KernelBuffer;
+
 			// Input:
 			//  ULONG Mode :always 0 
 			//  HOOK_FUNCTION (PVOID) hook_function
@@ -40,28 +37,28 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 			//  ULONG priority
 			//  FILTER_POINT filter_point
 
-			if ((InputBufferLeng < NeedBufferLength) || (OutputBufferLeng < NeedBufferLength)) {
+			if ((InputBufferLeng < sizeof(PWINPFILTER_R0_HOOK_OP_STRUCTURE)) || (OutputBufferLeng < sizeof(PWINPFILTER_R0_HOOK_OP_STRUCTURE))) {
 				Status = STATUS_UNSUCCESSFUL;
 				break;
 			}
-			if (*FilterPoint >= HOOK_LIST_COUNT || *ModeOrStatus != 0) {
+			if (WinpfilterR0HookOPData->FilterPoint >= HOOK_LIST_COUNT || WinpfilterR0HookOPData->Mode != 0) {
 				Status = STATUS_UNSUCCESSFUL; 
 				break;
 			}
 
-			Irp->IoStatus.Information = NeedBufferLength;
+			Irp->IoStatus.Information = sizeof(PWINPFILTER_R0_HOOK_OP_STRUCTURE);
 
 			switch (CTLCode)
 			{
 			case WINPFILTER_CTL_CODE_REGISTER_HOOK:
-				Status = RegisterHook(*HookFunction,*Priority,*FilterPoint);
+				Status = RegisterHook((HOOK_FUNCTION)WinpfilterR0HookOPData->HookFunction, WinpfilterR0HookOPData->Priority, WinpfilterR0HookOPData->FilterPoint);
 				if (!NT_SUCCESS(Status)) {
 					break;
 				}
-				*ModeOrStatus = TRUE;
+				WinpfilterR0HookOPData->Mode = TRUE;
 				break;
 			case WINPFILTER_CTL_CODE_UNREGISTER_HOOK:
-				*ModeOrStatus = UnregisterHook(*HookFunction, *Priority, *FilterPoint);
+				WinpfilterR0HookOPData->Mode = UnregisterHook((HOOK_FUNCTION)WinpfilterR0HookOPData->HookFunction, WinpfilterR0HookOPData->Priority, WinpfilterR0HookOPData->FilterPoint);
 				break;
 			default:
 				Status = STATUS_UNSUCCESSFUL;
@@ -76,9 +73,9 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 		}
 		else if (DeviceObject == WPFilterR3CommandCommunicationDevice) {
 			// Used for command
-			ULONG* ModeOrFunction = (ULONG*)(KernelBuffer);
-			ULONG* Value = (ULONG*)(ModeOrFunction + 1);
-			ULONG  NeedBufferLength = (ULONG)(((ULONGLONG)(Value + 1)) - ((ULONGLONG)(KernelBuffer)));
+
+			PWINPFILTER_R3_HOOK_OP_STRUCTURE WinpfilterR3HookOPData = (PWINPFILTER_R3_HOOK_OP_STRUCTURE)KernelBuffer;
+
 			// Input:
 			//  ULONG [0] mode : 1 set  other get
 			//  ULONG [1] value
@@ -86,97 +83,97 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 			//  ULONG [0] function
 			//  ULONG [1] value
 
-			if ((InputBufferLeng < NeedBufferLength) || (OutputBufferLeng < NeedBufferLength)) {
+			if ((InputBufferLeng < sizeof(PWINPFILTER_R3_HOOK_OP_STRUCTURE)) || (OutputBufferLeng < sizeof(PWINPFILTER_R3_HOOK_OP_STRUCTURE))) {
 				Status = STATUS_UNSUCCESSFUL;
 				break;
 			}
 
-			Irp->IoStatus.Information = NeedBufferLength;
+			Irp->IoStatus.Information = sizeof(PWINPFILTER_R3_HOOK_OP_STRUCTURE);
 			switch (CTLCode)
 			{
 			case WINPFILTER_CTL_CODE_VERSION:
 				// Get only: Version
-				*Value = WINPFILTER_VERSION;
+				WinpfilterR3HookOPData->Value = WINPFILTER_VERSION;
 				break;
 			case WINPFILTER_CTL_CODE_FORWARDING_MODE:
-				if (*ModeOrFunction == 1 && *Value <= 2) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 2) {
 					// Set forwarding mode
 					//  IP_FORWARDING_MODE_SYSTEM		0
 					//  IP_FORWARDING_MODE_WINPFILTER	1
 					//  IP_FORWARDING_MODE_DISABLE		2
-					IPForwardingMode = (BYTE)*Value;
+					IPForwardingMode = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = IPForwardingMode;
+				WinpfilterR3HookOPData->Value = IPForwardingMode;
 				break;
 			case WINPFILTER_CTL_CODE_RX_BAD_IP_CSUM:
-				if (*ModeOrFunction == 1 && *Value <= 1) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 1) {
 					// Set IndicateModifiedRxPacketWithBadIPChecksumAsGood
 					//  FALSE	0
 					//  TRUE	1
-					IndicateModifiedRxPacketWithBadIPChecksumAsGood = (BYTE)*Value;
+					IndicateModifiedRxPacketWithBadIPChecksumAsGood = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = IndicateModifiedRxPacketWithBadIPChecksumAsGood;
+				WinpfilterR3HookOPData->Value = IndicateModifiedRxPacketWithBadIPChecksumAsGood;
 				break;
 			case WINPFILTER_CTL_CODE_RX_BAD_TCP_CSUM:
-				if (*ModeOrFunction == 1 && *Value <= 1) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 1) {
 					// Set IndicateModifiedRxPacketWithBadTCPChecksumAsGood
 					//  FALSE	0
 					//  TRUE	1
-					IndicateModifiedRxPacketWithBadTCPChecksumAsGood = (BYTE)*Value;
+					IndicateModifiedRxPacketWithBadTCPChecksumAsGood = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = IndicateModifiedRxPacketWithBadTCPChecksumAsGood;
+				WinpfilterR3HookOPData->Value = IndicateModifiedRxPacketWithBadTCPChecksumAsGood;
 				break;
 			case WINPFILTER_CTL_CODE_RX_BAD_UDP_CSUM:
-				if (*ModeOrFunction == 1 && *Value <= 1) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 1) {
 					// Set IndicateModifiedRxPacketWithBadUDPChecksumAsGood
 					//  FALSE	0
 					//  TRUE	1
-					IndicateModifiedRxPacketWithBadUDPChecksumAsGood = (BYTE)*Value;
+					IndicateModifiedRxPacketWithBadUDPChecksumAsGood = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = IndicateModifiedRxPacketWithBadUDPChecksumAsGood;
+				WinpfilterR3HookOPData->Value = IndicateModifiedRxPacketWithBadUDPChecksumAsGood;
 				break;
 			case WINPFILTER_CTL_CODE_TX_NIC_IP_CSUM:
-				if (*ModeOrFunction == 1 && *Value <= 1) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 1) {
 					// Set TryCalcModifiedTxPacketIPChecksumByNIC
 					//  FALSE	0
 					//  TRUE	1
-					TryCalcModifiedTxPacketIPChecksumByNIC = (BYTE)*Value;
+					TryCalcModifiedTxPacketIPChecksumByNIC = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = TryCalcModifiedTxPacketIPChecksumByNIC;
+				WinpfilterR3HookOPData->Value = TryCalcModifiedTxPacketIPChecksumByNIC;
 				break;
 			case WINPFILTER_CTL_CODE_TX_NIC_TCP_CSUM:
-				if (*ModeOrFunction == 1 && *Value <= 1) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 1) {
 					// Set TryCalcModifiedTxPacketTCPChecksumByNIC
 					//  FALSE	0
 					//  TRUE	1
-					TryCalcModifiedTxPacketTCPChecksumByNIC = (BYTE)*Value;
+					TryCalcModifiedTxPacketTCPChecksumByNIC = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = TryCalcModifiedTxPacketTCPChecksumByNIC;
+				WinpfilterR3HookOPData->Value = TryCalcModifiedTxPacketTCPChecksumByNIC;
 				break;
 			case WINPFILTER_CTL_CODE_TX_NIC_UDP_CSUM:
-				if (*ModeOrFunction == 1 && *Value <= 1) {
+				if (WinpfilterR3HookOPData->Mode == 1 && WinpfilterR3HookOPData->Value <= 1) {
 					// Set TryCalcModifiedTxPacketUDPChecksumByNIC
 					//  FALSE	0
 					//  TRUE	1
-					TryCalcModifiedTxPacketUDPChecksumByNIC = (BYTE)*Value;
+					TryCalcModifiedTxPacketUDPChecksumByNIC = (BYTE)WinpfilterR3HookOPData->Value;
 				}
-				*Value = TryCalcModifiedTxPacketUDPChecksumByNIC;
+				WinpfilterR3HookOPData->Value = TryCalcModifiedTxPacketUDPChecksumByNIC;
 				break;
 			case WINPFILTER_CTL_CODE_HOOK_INFO:
 				// Get only: Hook info
-				if (*Value < HOOK_LIST_COUNT) {
-					*Value = GetHookInformation(*Value, (PHOOK_INFO)(KernelBuffer+ NeedBufferLength), OutputBufferLeng- NeedBufferLength);
+				if (WinpfilterR3HookOPData->Value < HOOK_LIST_COUNT) {
+					WinpfilterR3HookOPData->Value = GetHookInformation(WinpfilterR3HookOPData->Value, (PHOOK_INFO)(KernelBuffer+ sizeof(WINPFILTER_R3_HOOK_OP_STRUCTURE)), OutputBufferLeng- sizeof(WINPFILTER_R3_HOOK_OP_STRUCTURE));
 					Irp->IoStatus.Information = OutputBufferLeng;
 				}
 				else {
-					*Value = ULONG_MAX;
+					WinpfilterR3HookOPData->Value = ULONG_MAX;
 				}
 				break;
 			default:
 				Status = STATUS_UNSUCCESSFUL;
 				break;
 			}
-			*ModeOrFunction = Function;
+			WinpfilterR3HookOPData->Mode = Function;
 			if (!NT_SUCCESS(Status)) {
 				Irp->IoStatus.Information = 0;
 			}
@@ -244,6 +241,8 @@ NTSTATUS WPFilterCommDeviceWrite(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 }
 
 NTSTATUS WPFilterCommDeviceCreate(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
+	UNREFERENCED_PARAMETER(DeviceObject);
+	UNREFERENCED_PARAMETER(Irp);
 	TRACE_ENTER();
 	NTSTATUS Status = STATUS_SUCCESS;
 
@@ -255,6 +254,8 @@ NTSTATUS WPFilterCommDeviceCreate(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 }
 
 NTSTATUS WPFilterCommDeviceClose(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
+	UNREFERENCED_PARAMETER(DeviceObject);
+	UNREFERENCED_PARAMETER(Irp);
 	TRACE_ENTER();
 	NTSTATUS Status = STATUS_SUCCESS;
 
@@ -266,6 +267,9 @@ NTSTATUS WPFilterCommDeviceClose(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 }
 
 NTSTATUS WPFilterCommDeviceClean(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
+	UNREFERENCED_PARAMETER(DeviceObject);
+	UNREFERENCED_PARAMETER(Irp);
+
 	TRACE_ENTER();
 	NTSTATUS Status = STATUS_SUCCESS;
 
