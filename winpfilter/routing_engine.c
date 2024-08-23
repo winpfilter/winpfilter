@@ -396,6 +396,8 @@ VOID RoutingDecisionThread() {
 
 		PROUTING_TASK Task = CONTAINING_RECORD(ProcessingTaskListNode, ROUTING_TASK, QueueNode);
 
+
+		//TODO
 	}
 	TRACE_DBG("RoutingDecisionThread Stop\n");
 	PsTerminateSystemThread(STATUS_SUCCESS);
@@ -432,7 +434,7 @@ VOID StopRoutingEngine() {
 	KeWaitForMultipleObjects(ROUTING_PROC_COUNT, (PVOID*) ( & RoutingThreads), WaitAll, Executive, KernelMode, FALSE, NULL, (PKWAIT_BLOCK)WaitBuffer);
 	for (int i = 0; i < ROUTING_PROC_COUNT; i++) {
 		ObDereferenceObject(RoutingThreads[i]);
-
+		NdisAcquireSpinLock(&TaskQueues[i].QueueLock);
 		PLIST_ENTRY TaskPtr;
 		while (
 				(TaskPtr = RemoveHeadList(&TaskQueues[i].QueueLink)) 
@@ -440,6 +442,7 @@ VOID StopRoutingEngine() {
 			) {
 			FreeRoutingTask(CONTAINING_RECORD(TaskPtr, ROUTING_TASK, QueueNode));
 		}
+		NdisReleaseSpinLock(&TaskQueues[i].QueueLock);
 
 		FreeQueue(&TaskQueues[i]);
 	}
@@ -483,6 +486,7 @@ NTSTATUS CreateAndProcessRoutingTaskWithoutDataBufferCopy(BYTE* Buffer, ULONG Da
 VOID FreeRoutingTaskWithoutDataBuffer(PROUTING_TASK Task) {
 	if (Task != NULL) {
 		ExFreePoolWithTag(Task, ROUTING_TASK_ALLOC_TAG);
+		Task = NULL;
 	}
 }
 
@@ -490,7 +494,9 @@ VOID FreeRoutingTask(PROUTING_TASK Task) {
 	if (Task != NULL) {
 		if (Task->DataBuffer.Buffer != NULL) {
 			ExFreePool(Task->DataBuffer.Buffer);
+			Task->DataBuffer.Buffer = NULL;
 		}
 		ExFreePoolWithTag(Task, ROUTING_TASK_ALLOC_TAG);
+		Task = NULL;
 	}
 }

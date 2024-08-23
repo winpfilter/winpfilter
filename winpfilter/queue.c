@@ -18,7 +18,10 @@ VOID FreeQueue(PQUEUE Queue) {
 }
 
 PLIST_ENTRY Dequeue(PQUEUE Queue) {
-	PLIST_ENTRY ReturnItem;
+	PLIST_ENTRY ReturnItem = NULL;
+	if (Queue == NULL) {
+		return NULL;
+	}
 	NdisAcquireSpinLock(&(Queue->QueueLock));
 	if (Queue->ItemCounts <= 0) {
 		KeClearEvent(&(Queue->DataEnqueueEvent));
@@ -34,7 +37,7 @@ PLIST_ENTRY Dequeue(PQUEUE Queue) {
 }
 
 VOID Enqueue(PQUEUE Queue, PLIST_ENTRY Item) {
-	if (Item == NULL) {
+	if (Queue == NULL || Item == NULL) {
 		return;
 	}
 	NdisAcquireSpinLock(&(Queue->QueueLock));
