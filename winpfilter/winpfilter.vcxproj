@@ -125,7 +125,7 @@
     <ClCompile Include="hook_manager.c" />
     <ClCompile Include="filter_subroutines.c" />
     <ClCompile Include="interface_ip_table.c" />
-    <ClCompile Include="forwarding_engine.c" />
+    <ClCompile Include="routing_engine.c" />
     <ClCompile Include="net\ip.c" />
     <ClCompile Include="queue.c" />
     <ClCompile Include="route.c" />
@@ -138,7 +138,7 @@
     <ClInclude Include="include\global_variables.h" />
     <ClInclude Include="include\hook_manager.h" />
     <ClInclude Include="include\interface_ip_table.h" />
-    <ClInclude Include="include\forwarding_engine.h" />
+    <ClInclude Include="include\routing_engine.h" />
     <ClInclude Include="include\queue.h" />
     <ClInclude Include="include\route.h" />
     <ClInclude Include="include\winpfilter.h" />

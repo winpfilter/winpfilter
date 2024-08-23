@@ -226,9 +226,8 @@ HOOK_RESULT FilterEthernetPacket(BYTE* EthernetBuffer, ULONG* DataLength,ULONG B
 
 	NdisReleaseRWLock(HookListsLock[FilterPoint], &LockState);
 	
-	// When the buffer been modified, create a new NBL and then drop the old one.
 	if (Result.Modified) {
-		Result.Accept = FALSE;
+		Result.Accept = TRUE;
 	}
 
 	return Result;

@@ -47,7 +47,9 @@ typedef struct _IP_ADDRESS_LINK {
 	IP_ADDRESS Address;
 }IP_ADDRESS_LINK, * PIP_ADDRESS_LINK;
 
-
+#ifdef DBG
+VOID PrintIPAddress(PIP_ADDRESS addr);
+#endif 
 
 
 inline BYTE GetIPHeaderVersion(PVOID header) {

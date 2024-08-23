@@ -143,6 +143,7 @@ VOID UnicastIpAddressChangeNotifyCallback(PVOID CallerContext, PMIB_UNICASTIPADD
 
 		InitializeIPAddressBySockAddrINet(&Address, &UnicastIPTableItem->Address, UnicastIPTableItem->OnLinkPrefixLength);
 		InsertIntoInterfaceIPCache(UnicastIPTableItem->InterfaceLuid, Address);
+		PrintIPAddress(&Address);
 
 	}
 

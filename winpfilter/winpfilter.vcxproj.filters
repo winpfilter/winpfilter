@@ -48,7 +48,7 @@
     <ClCompile Include="global_variables.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="forwarding_engine.c">
+    <ClCompile Include="routing_engine.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="interface_ip_table.c">
@@ -83,7 +83,7 @@
     <ClInclude Include="include\global_variables.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\forwarding_engine.h">
+    <ClInclude Include="include\routing_engine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="include\interface_ip_table.h">

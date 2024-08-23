@@ -39,9 +39,9 @@ VOID InitializeIPAddressBySockAddrINet(PIP_ADDRESS IPAddress,PSOCKADDR_INET Sock
 	BYTE PrefixByteRemain = PrefixLength % BYTE_BIT_LENGTH;
 	BYTE PrefixByteRemainMask = (((BYTE)0xff) << (BYTE_BIT_LENGTH- PrefixByteRemain));
 	if (PrefixByteCount < IPV6_ADDRESS_BYTE_LENGTH) {
-		IPAddress->IPV6Address.AddressBytes[PrefixByteCount] &= PrefixByteRemainMask;
+		IPAddress->IPV6NetworkSegment.AddressBytes[PrefixByteCount] &= PrefixByteRemainMask;
 	}
 	for (BYTE i = PrefixByteCount +1; i < IPV6_ADDRESS_BYTE_LENGTH; i++) {
-		IPAddress->IPV6Address.AddressBytes[i] = 0;
+		IPAddress->IPV6NetworkSegment.AddressBytes[i] = 0;
 	}
 }
