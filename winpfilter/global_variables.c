@@ -18,3 +18,6 @@ BYTE TryCalcModifiedTxPacketTCPChecksumByNIC = TRUE;
 BYTE TryCalcModifiedTxPacketUDPChecksumByNIC = TRUE;
 
 BYTE IPForwardingMode = IP_FORWARDING_MODE_SYSTEM;
+
+
+ROUTE_TABLE WinPFilterRouteTable[ROUTE_TABLE_TOTAL_COUNT];

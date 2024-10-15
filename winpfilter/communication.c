@@ -169,6 +169,13 @@ NTSTATUS WPFilterCommDeviceIOCtl(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
 					WinpfilterR3HookOPData->Value = ULONG_MAX;
 				}
 				break;
+			case WINPFILTER_CTL_CODE_RT_TABLE_INFO:
+
+				break;
+
+			case WINPFILTER_CTL_CODE_RT_TABLE_CTL:
+
+				break;
 			default:
 				Status = STATUS_UNSUCCESSFUL;
 				break;

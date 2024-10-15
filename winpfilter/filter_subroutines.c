@@ -6,11 +6,11 @@
 
 #include "filter_subroutines.h"
 #include "hook_manager.h"
-#include "route.h"
+#include "route_info.h"
 #include "global_variables.h"
-#include "routing_engine.h"
-#include "ether.h"
-#include "ip.h"
+#include "route_engine.h"
+#include "net/ether.h"
+#include "net/ip.h"
 
 VOID FreeSingleNBL(PNET_BUFFER_LIST NetBufferList);
 

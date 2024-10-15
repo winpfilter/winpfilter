@@ -7,6 +7,7 @@
 typedef enum _IP_PROTOCOLS
 {
 	IP = 0,
+	IPV4 = 0,
 	IPV6_EXT_HOPOPT = 0,
 	ICMP = 1,
 	IGMP = 2,
@@ -25,31 +26,18 @@ typedef enum _IP_PROTOCOLS
 #include "ipv4.h"
 #include "ipv6.h"
 
+typedef union _UNI_IPADDRESS
+{
+	IPV4_ADDRESS	IPV4Address;
+	IPV6_ADDRESS	IPV6Address;
+}UNI_IPADDRESS,*PUNI_IPADDRESS;
+
 typedef struct _IP_ADDRESS {
 	BYTE Family;
 	BYTE PrefixLength;
-	union
-	{
-		IPV4_ADDRESS	IPV4Address;
-		IPV6_ADDRESS	IPV6Address;
-	};
-	union
-	{
-		IPV4_ADDRESS	IPV4NetworkSegment;
-		IPV6_ADDRESS	IPV6NetworkSegment;
-	};
-	IPV4_ADDRESS	IPV4BroadcastAddress;
+	UNI_IPADDRESS IPAddress;
 }IP_ADDRESS, *PIP_ADDRESS;
 
-
-typedef struct _IP_ADDRESS_LINK {
-	LIST_ENTRY Link;
-	IP_ADDRESS Address;
-}IP_ADDRESS_LINK, * PIP_ADDRESS_LINK;
-
-#ifdef DBG
-VOID PrintIPAddress(PIP_ADDRESS addr);
-#endif 
 
 
 inline BYTE GetIPHeaderVersion(PVOID header) {
@@ -59,5 +47,3 @@ inline BYTE GetIPHeaderVersion(PVOID header) {
 inline VOID SetIPHeaderVersion(PVOID header,BYTE version) {
 	((PIPV4_HEADER)header)->Version = version;
 }
-
-VOID InitializeIPAddressBySockAddrINet(PIP_ADDRESS IPAddress, PSOCKADDR_INET SockAddress, BYTE PrefixLength);

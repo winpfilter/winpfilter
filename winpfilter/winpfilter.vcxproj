@@ -125,10 +125,10 @@
     <ClCompile Include="hook_manager.c" />
     <ClCompile Include="filter_subroutines.c" />
     <ClCompile Include="interface_ip_table.c" />
-    <ClCompile Include="routing_engine.c" />
-    <ClCompile Include="net\ip.c" />
+    <ClCompile Include="route_engine.c" />
     <ClCompile Include="queue.c" />
-    <ClCompile Include="route.c" />
+    <ClCompile Include="route_info.c" />
+    <ClCompile Include="route_table.c" />
     <ClCompile Include="winpfilter.c" />
   </ItemGroup>
   <ItemGroup>
@@ -138,16 +138,17 @@
     <ClInclude Include="include\global_variables.h" />
     <ClInclude Include="include\hook_manager.h" />
     <ClInclude Include="include\interface_ip_table.h" />
-    <ClInclude Include="include\routing_engine.h" />
+    <ClInclude Include="include\net\ether.h" />
+    <ClInclude Include="include\net\ip.h" />
+    <ClInclude Include="include\net\ipv4.h" />
+    <ClInclude Include="include\net\ipv6.h" />
+    <ClInclude Include="include\net\tcp.h" />
+    <ClInclude Include="include\net\udp.h" />
+    <ClInclude Include="include\route_engine.h" />
     <ClInclude Include="include\queue.h" />
-    <ClInclude Include="include\route.h" />
+    <ClInclude Include="include\route_info.h" />
+    <ClInclude Include="include\route_table.h" />
     <ClInclude Include="include\winpfilter.h" />
-    <ClInclude Include="net\include\ether.h" />
-    <ClInclude Include="net\include\ip.h" />
-    <ClInclude Include="net\include\ipv4.h" />
-    <ClInclude Include="net\include\ipv6.h" />
-    <ClInclude Include="net\include\tcp.h" />
-    <ClInclude Include="net\include\udp.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

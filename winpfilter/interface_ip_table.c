@@ -53,10 +53,10 @@ BOOLEAN IsLocalIP(BYTE* Address, IP_PROTOCOLS Portocol) {
 		PINTERFACE_IP_INFO IfIpEntry = CONTAINING_RECORD(CurrentEntry, INTERFACE_IP_INFO, Link);
 		if (IfIpEntry->IPAddress.Family == Portocol) {
 			if (Portocol == IP) {
-				CompareResult = (RtlCompareMemory(Address, &IfIpEntry->IPAddress.IPV4Address, IPV4_ADDRESS_BYTE_LENGTH) == IPV4_ADDRESS_BYTE_LENGTH);
+				CompareResult = (RtlCompareMemory(Address, &IfIpEntry->IPAddress.IPAddress, IPV4_ADDRESS_BYTE_LENGTH) == IPV4_ADDRESS_BYTE_LENGTH);
 			}
 			else if (Portocol == IPV6) {
-				CompareResult = (RtlCompareMemory(Address, &IfIpEntry->IPAddress.IPV6Address, IPV6_ADDRESS_BYTE_LENGTH) == IPV6_ADDRESS_BYTE_LENGTH);
+				CompareResult = (RtlCompareMemory(Address, &IfIpEntry->IPAddress.IPAddress, IPV6_ADDRESS_BYTE_LENGTH) == IPV6_ADDRESS_BYTE_LENGTH);
 			}
 		}
 		if (CompareResult == TRUE) {

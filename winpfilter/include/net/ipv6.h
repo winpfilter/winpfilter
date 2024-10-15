@@ -1,6 +1,5 @@
 #pragma once
 #include "winpfilter.h"
-
 #pragma pack (1)
 
 typedef struct _IPV6_ADDRESS {

@@ -6,11 +6,12 @@
 
 #include "winpfilter.h"
 #include "filter_subroutines.h"
-#include "route.h"
+#include "route_info.h"
 #include "hook_manager.h"
 #include "global_variables.h"
 #include "communication.h"
-#include "routing_engine.h"
+#include "route_engine.h"
+#include "route_table.h"
 
 VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 
@@ -30,6 +31,7 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 	FreeFilterHookManager();
 	StopMonitorUnicastIpChange();
 	StopMonitorSystemRouteTableChange();
+	CleanupAllRouteTable();
 	NdisFDeregisterFilterDriver(FilterDriverHandle);
 	FreeInterfaceIPCacheManager();
 	StopRoutingEngine();
@@ -142,6 +144,8 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 			break;
 		}
 
+		InitializeAllRouteTable();
+
 		//Monitor route table change
 		Status = StartMonitorSystemRouteTableChange();
 		if (!NT_SUCCESS(Status)) {
@@ -208,6 +212,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		FreeFilterHookManager();
 		StopMonitorUnicastIpChange();
 		StopMonitorSystemRouteTableChange();
+		CleanupAllRouteTable();
 		NdisFDeregisterFilterDriver(FilterDriverHandle);
 		FreeInterfaceIPCacheManager();
 		StopRoutingEngine();

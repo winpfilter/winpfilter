@@ -1,6 +1,6 @@
 #pragma once
 #include "winpfilter.h"
-#include "ip.h"
+#include "net/ip.h"
 
 #define INTERFACE_MAX_IP_COUNT 65536
 
