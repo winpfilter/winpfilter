@@ -24,7 +24,7 @@ typedef struct _TCP_FLAGS {
 	BYTE ECE : 1;
 	BYTE CWR : 1;
 #endif
-}TCP_FLAGS,*PTCP_FLAGS;
+}TCP_FLAGS, * PTCP_FLAGS;
 
 typedef struct _TCP_HEADER {
 	USHORT		SrcPort;
@@ -70,15 +70,6 @@ inline ULONG GetTCPHeaderSequenceNumber(PTCP_HEADER header) {
 
 inline VOID SetTCPHeaderSequenceNumber(PTCP_HEADER header, ULONG seq_num) {
 	header->Sequence = CONVERT_NETE_32(seq_num);
-}
-
-
-inline ULONG GetTCPHeaderAcknowledgementNumber(PTCP_HEADER header) {
-	return CONVERT_NETE_32((header)->Acknowledgment);
-}
-
-inline VOID SetTCPHeaderAcknowledgementNumber(PTCP_HEADER header, ULONG ack_num) {
-	header->Acknowledgment = CONVERT_NETE_32(ack_num);
 }
 
 
@@ -209,7 +200,7 @@ inline USHORT GetTCPHeaderUrgentPointer(PTCP_HEADER header) {
 	return CONVERT_NETE_16(header->UrgentPointer);
 }
 
-inline VOID SetTCPHeaderSrcPort(PTCP_HEADER header, USHORT urg_ptr) {
+inline VOID SetTCPHeaderUrgentPointer(PTCP_HEADER header, USHORT urg_ptr) {
 	header->UrgentPointer = CONVERT_NETE_16(urg_ptr);
 }
 

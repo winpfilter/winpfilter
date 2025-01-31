@@ -6,11 +6,12 @@
 
 #include "winpfilter.h"
 #include "filter_subroutines.h"
-#include "route.h"
+#include "route_info.h"
 #include "hook_manager.h"
 #include "global_variables.h"
 #include "communication.h"
-
+#include "route_engine.h"
+#include "route_table.h"
 
 VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 
@@ -30,8 +31,10 @@ VOID DriverUnload(PDRIVER_OBJECT DriverObject) {
 	FreeFilterHookManager();
 	StopMonitorUnicastIpChange();
 	StopMonitorSystemRouteTableChange();
+	CleanupAllRouteTable();
 	NdisFDeregisterFilterDriver(FilterDriverHandle);
 	FreeInterfaceIPCacheManager();
+	StopRoutingEngine();
 	NdisFreeSpinLock(&FilterListLock);
 
 	TRACE_EXIT();
@@ -124,6 +127,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		NdisAllocateSpinLock(&FilterListLock);
 		InitializeListHead(&FilterModuleList);
 
+		StartRoutingEngine();
 
 		Status = InitializeInterfaceIPCacheManager(FilterDriverObject);
 		if (!NT_SUCCESS(Status)) {
@@ -139,6 +143,8 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		if (!NT_SUCCESS(Status)) {
 			break;
 		}
+
+		InitializeAllRouteTable();
 
 		//Monitor route table change
 		Status = StartMonitorSystemRouteTableChange();
@@ -206,8 +212,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) 
 		FreeFilterHookManager();
 		StopMonitorUnicastIpChange();
 		StopMonitorSystemRouteTableChange();
+		CleanupAllRouteTable();
 		NdisFDeregisterFilterDriver(FilterDriverHandle);
 		FreeInterfaceIPCacheManager();
+		StopRoutingEngine();
 		NdisFreeSpinLock(&FilterListLock);
 	}
 

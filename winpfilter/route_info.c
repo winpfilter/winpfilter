@@ -1,8 +1,9 @@
-#include "route.h"
+#include "route_info.h"
 #include "global_variables.h"
 #include "filter_subroutines.h"
-#include "ip.h"
-#include "ether.h"
+#include "net/ip.h"
+#include "net/ether.h"
+#include "route_table.h"
 
 BOOLEAN IsSystemRouteTableChangeMonitorActive = FALSE;
 HANDLE WPFilterRouteTableChangeNotifyHandle = NULL;
@@ -107,15 +108,37 @@ VOID RouteTableChangeNotifyCallback(PVOID CallerContext, PMIB_IPFORWARD_ROW2 Row
 
 	SystemRouteTableItemCounts = SystemRouteTable->NumEntries;
 
+	KIRQL oldIrql;
+	PROUTE_TABLE SystemMirrorRouteTable = &WinPFilterRouteTable[ROUTE_TABLE_SYSTEM_MIRROR];
+	KeAcquireSpinLock(&SystemMirrorRouteTable->Lock, &oldIrql);
+	CleanupRouteTable(SystemMirrorRouteTable,FALSE);
+
 	for (ULONG i = 0; i < SystemRouteTableItemCounts; i++) {
 		Item = &SystemRouteTable->Table[i];
+		
+		UNI_IPADDRESS DestIP;
+		UNI_IPADDRESS GwIP;
+		IP_PROTOCOLS Protocol = Item->DestinationPrefix.Prefix.si_family == AF_INET ? IPV4 : IPV6;
 
-		InitializeIPAddressBySockAddrINet(&RouteDestination, &Item->DestinationPrefix.Prefix, Item->DestinationPrefix.PrefixLength);
-		InitializeIPAddressBySockAddrINet(&NextHop, &Item->NextHop, BYTE_MAX_VALUE);
-		InterfaceLuid = Item->InterfaceLuid;
-		Metric = Item->Metric;
+		if (Protocol == IPV4) {
+			DestIP.IPV4Address.AddressInt32 = Item->DestinationPrefix.Prefix.Ipv4.sin_addr.S_un.S_addr;
+			GwIP.IPV4Address.AddressInt32 = Item->NextHop.Ipv4.sin_addr.S_un.S_addr;
+		}
+		else {
+			memcpy(DestIP.IPV6Address.AddressBytes, Item->DestinationPrefix.Prefix.Ipv6.sin6_addr.u.Byte, IPV6_ADDRESS_BYTE_LENGTH);
+			memcpy(GwIP.IPV6Address.AddressBytes, Item->NextHop.Ipv6.sin6_addr.u.Byte, IPV6_ADDRESS_BYTE_LENGTH);
+		}
 
+		AddRouteEntry(SystemMirrorRouteTable, Protocol, DestIP, GwIP, Item->DestinationPrefix.PrefixLength, Item->InterfaceLuid, Item->Metric, FALSE);
 	}
+	KeReleaseSpinLock(&SystemMirrorRouteTable->Lock, oldIrql);
+
+#if DBG
+	TRACE_DBG("SYSTEM ROUTE TABLE (MIRROR):");
+	PrintRouteTable(SystemMirrorRouteTable);
+	TRACE_DBG("SYSTEM ROUTE TABLE (MIRROR) END");
+#endif	
+
 
 	FreeMibTable(SystemRouteTable);
 
@@ -141,7 +164,11 @@ VOID UnicastIpAddressChangeNotifyCallback(PVOID CallerContext, PMIB_UNICASTIPADD
 	for (ULONG i = 0; i < UnicastIPTableItemCounts; i++) {
 		UnicastIPTableItem = &UnicastIPTable->Table[i];
 
-		InitializeIPAddressBySockAddrINet(&Address, &UnicastIPTableItem->Address, UnicastIPTableItem->OnLinkPrefixLength);
+		Address.Family = UnicastIPTableItem->Address.si_family == AF_INET ? IPV4 : IPV6;
+		Address.PrefixLength = UnicastIPTableItem->OnLinkPrefixLength;
+		UnicastIPTableItem->Address.si_family == AF_INET ? 
+			RtlCopyMemory(Address.IPAddress.IPV4Address.AddressBytes, &UnicastIPTableItem->Address.Ipv4.sin_addr.s_addr, IPV4_ADDRESS_BYTE_LENGTH):
+			RtlCopyMemory(Address.IPAddress.IPV6Address.AddressBytes, &UnicastIPTableItem->Address.Ipv6.sin6_addr.s6_bytes, IPV6_ADDRESS_BYTE_LENGTH);
 		InsertIntoInterfaceIPCache(UnicastIPTableItem->InterfaceLuid, Address);
 
 	}
